@@ -165,6 +165,8 @@
       <button class="chip mm" data-f="mm" aria-pressed="false">Metro Market</button>
     </div>
     <div class="tools">
+      <button class="tbtn" id="locBtn" title="Recalculate every distance from your current location">📍 My location</button>
+      <button class="tbtn" id="homeBtn" title="Use your home address (Port Washington) for distances">🏠 Home</button>
       <button class="tbtn" id="exportBtn" title="Download your data as a backup file">Export</button>
       <button class="tbtn" id="importBtn" title="Load data from a backup file">Import</button>
       <input type="file" id="importFile" accept="application/json" style="display:none">
@@ -380,8 +382,9 @@ const ORIGIN_ZIP="53074"; // 1084 West Port Dr, Port Washington, WI
 const ALL_ZIPS=[...new Set([...PNS,...MM].map(r=>r[2]))];
 let zipCoords={}; try{ zipCoords=JSON.parse(localStorage.getItem("pnsmm-zip")||"{}"); }catch(e){ zipCoords={}; }
 let distMap={};
+let originCoords=null; // null = home (Port Washington); set to GPS coords when "My location" is used
 function milesBetween(a,b){ const R=3958.8,toR=x=>x*Math.PI/180; const dLat=toR(b.lat-a.lat),dLng=toR(b.lng-a.lng); const s=Math.sin(dLat/2)**2+Math.cos(toR(a.lat))*Math.cos(toR(b.lat))*Math.sin(dLng/2)**2; return 2*R*Math.asin(Math.sqrt(s)); }
-function computeDistMap(){ const o=zipCoords[ORIGIN_ZIP]; if(!o) return; distMap={}; ALL_ZIPS.forEach(z=>{ if(zipCoords[z]) distMap[z]=Math.round(milesBetween(o,zipCoords[z])); }); }
+function computeDistMap(){ const o=originCoords||zipCoords[ORIGIN_ZIP]; if(!o) return; distMap={}; ALL_ZIPS.forEach(z=>{ if(zipCoords[z]) distMap[z]=Math.round(milesBetween(o,zipCoords[z])); }); }
 function fmtDist(z){ return (distMap[z]!=null) ? ("🚗 ~"+distMap[z]+" mi") : "…"; }
 async function ensureDistances(){
   const need=[...new Set([ORIGIN_ZIP,...ALL_ZIPS])].filter(z=>!zipCoords[z]);
@@ -394,6 +397,17 @@ async function ensureDistances(){
   computeDistMap();
   document.querySelectorAll('.dist').forEach(el=>{ el.textContent=fmtDist(el.dataset.zip); });
 }
+function updateDistSpans(){ document.querySelectorAll('.dist').forEach(el=>{ el.textContent=fmtDist(el.dataset.zip); }); }
+function useMyLocation(){
+  if(!navigator.geolocation){ alert("Your browser can't share location."); return; }
+  setSync("📍 getting your location…");
+  navigator.geolocation.getCurrentPosition(
+    pos=>{ originCoords={lat:pos.coords.latitude,lng:pos.coords.longitude}; computeDistMap(); updateDistSpans(); setSync("📍 distances from your location"); },
+    err=>{ setSync("⚠️ location unavailable"); alert("Couldn't get your location — make sure location access is allowed for this site."); },
+    {enableHighAccuracy:true, timeout:10000, maximumAge:60000}
+  );
+}
+function useHome(){ originCoords=null; computeDistMap(); updateDistSpans(); setSync("🏠 distances from Port Washington"); }
 computeDistMap();
 
 const banners=[{key:"pns",tag:"Pick 'n Save",rows:PNS},{key:"mm",tag:"Metro Market",rows:MM}];
@@ -521,27 +535,4 @@ document.getElementById('exportBtn').addEventListener('click',()=>{
   a.href=url; a.download="pns-mm-tracker-"+new Date().toISOString().slice(0,10)+".json";
   document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
 });
-document.getElementById('importBtn').addEventListener('click',()=>document.getElementById('importFile').click());
-document.getElementById('importFile').addEventListener('change',function(){
-  const f=this.files[0]; if(!f) return;
-  const reader=new FileReader();
-  reader.onload=()=>{
-    try{
-      const obj=JSON.parse(reader.result);
-      if(obj&&typeof obj==="object"){ DATA=obj; save(); render(); alert("Data imported."); }
-      else alert("That file didn't look like tracker data.");
-    }catch(e){ alert("Couldn't read that file."); }
-  };
-  reader.readAsText(f);
-  this.value="";
-});
-
-window.addEventListener('focus', ()=>pullCloud(true));
-
-render();
-initCloud();
-ensureDistances();
-</script>
-</body>
-</html>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           
+document.getElementById('importBtn').addEventListener('click',()=>document.getElementById('importFi
