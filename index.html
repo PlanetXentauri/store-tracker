@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pick 'n Save & Metro Market — Every Wisconsin Store</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;900&family=Archivo+Narrow:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    color-scheme:dark;
+    --ink:#E9E7E2;
+    --paper:#111317;
+    --card:#1A1D23;
+    --muted:#9097A0;
+    --line:#2A2E36;
+    --pns:#F2576A;        /* Pick 'n Save red (dark-tuned) */
+    --pns-soft:#3A1A20;
+    --mm:#4FB07B;         /* Metro Market green (dark-tuned) */
+    --mm-soft:#15301F;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 24px rgba(0,0,0,.35);
+    /* store rating colors */
+    --r-red:#F2576A; --r-yellow:#F0B72E; --r-green:#4FB07B; --r-okay:#2563EB; --r-excellent:#A855F7;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;background:var(--paper);color:var(--ink);
+    font-family:'Inter',system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;line-height:1.45;
+  }
+  a{color:inherit}
+  .wrap{max-width:1000px;margin:0 auto;padding:0 18px}
+  header{padding:46px 0 26px;border-bottom:1px solid var(--line)}
+  .eyebrow{font-family:'Archivo Narrow',sans-serif;font-weight:700;letter-spacing:.18em;
+    text-transform:uppercase;font-size:12px;color:var(--muted);margin:0 0 10px}
+  h1{font-family:'Archivo',sans-serif;font-weight:900;letter-spacing:-.02em;
+    font-size:clamp(30px,6vw,52px);line-height:1.02;margin:0 0 14px}
+  h1 .red{color:var(--pns)} h1 .green{color:var(--mm)}
+  .lede{max-width:60ch;color:#C7CBD1;font-size:16px;margin:0}
+  .meta{margin-top:16px;font-size:13px;color:var(--muted)}
+  /* ---- Controls ---- */
+  .controls{position:sticky;top:0;z-index:20;background:rgba(17,19,23,.92);
+    backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:14px 0;margin-bottom:8px}
+  .controls .wrap{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  .search{flex:1 1 220px;display:flex;align-items:center;gap:8px;background:var(--card);
+    border:1px solid var(--line);border-radius:10px;padding:10px 12px;box-shadow:var(--shadow)}
+  .search svg{flex:none;color:var(--muted)}
+  .search input{border:0;outline:0;width:100%;font-size:15px;background:transparent;color:var(--ink);font-family:inherit}
+  .chips{display:flex;gap:6px}
+  .chip{font-family:'Archivo Narrow',sans-serif;font-weight:700;font-size:13px;letter-spacing:.02em;
+    border:1px solid var(--line);background:var(--card);color:#C7CBD1;
+    padding:9px 14px;border-radius:999px;cursor:pointer;transition:.15s;white-space:nowrap}
+  .chip:hover{border-color:#3A3F48}
+  .chip[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+  .chip.pns[aria-pressed="true"]{background:var(--pns);border-color:var(--pns)}
+  .chip.mm[aria-pressed="true"]{background:var(--mm);border-color:var(--mm)}
+  .tools{display:flex;gap:6px;margin-left:auto}
+  .tbtn{font-family:'Archivo Narrow',sans-serif;font-weight:700;font-size:12px;letter-spacing:.03em;
+    text-transform:uppercase;border:1px solid var(--line);background:var(--card);color:#C7CBD1;
+    padding:8px 11px;border-radius:8px;cursor:pointer;transition:.15s}
+  .tbtn:hover{border-color:#3A3F48;background:#22262E}
+  .syncstat{font-size:12px;color:var(--muted);white-space:nowrap}
+  .synccode{font-size:12px;color:var(--mm);white-space:nowrap;cursor:pointer;font-weight:600}
+  .count{width:100%;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+  /* ---- Banner section ---- */
+  .banner{margin:30px 0 8px}
+  .banner-head{display:flex;align-items:baseline;gap:12px;padding-bottom:8px}
+  .banner-tag{font-family:'Archivo',sans-serif;font-weight:900;font-size:13px;letter-spacing:.04em;
+    color:#fff;padding:5px 11px;border-radius:6px}
+  .banner.pns .banner-tag{background:var(--pns)} .banner.mm .banner-tag{background:var(--mm)}
+  .banner-head h2{font-family:'Archivo',sans-serif;font-weight:700;font-size:20px;margin:0}
+  .banner-head .n{color:var(--muted);font-size:14px;font-weight:500}
+  .city{font-family:'Archivo Narrow',sans-serif;font-weight:700;text-transform:uppercase;
+    letter-spacing:.08em;font-size:12px;color:var(--muted);
+    margin:18px 0 8px;padding-bottom:5px;border-bottom:1px solid var(--line)}
+  /* ---- Store row ---- */
+  .store-wrap{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--line);
+    border-radius:12px;margin-bottom:9px;box-shadow:var(--shadow);overflow:hidden;transition:.15s}
+  .store-wrap:hover{border-color:#3A3F48}
+  .store{display:flex;align-items:center;gap:14px;padding:13px 15px}
+  .pin{flex:none;width:34px;height:34px;border-radius:9px;display:grid;place-items:center}
+  .banner.pns .pin{background:var(--pns-soft);color:var(--pns)}
+  .banner.mm .pin{background:var(--mm-soft);color:var(--mm)}
+  .info{flex:1;min-width:0}
+  .addr{font-weight:600;font-size:16px;text-decoration:none;color:var(--ink);
+    display:inline-block;border-bottom:2px solid transparent;transition:.15s}
+  .banner.pns .addr:hover{color:var(--pns);border-color:var(--pns)}
+  .banner.mm .addr:hover{color:var(--mm);border-color:var(--mm)}
+  .sub{font-size:13px;color:var(--muted);margin-top:2px}
+  .sub a{color:var(--muted);text-decoration:none}
+  .sub a:hover{text-decoration:underline}
+  .rowmeta{display:flex;align-items:center;gap:8px;flex:none}
+  .dot{width:12px;height:12px;border-radius:50%;background:#3A3F48;flex:none;
+    box-shadow:0 0 0 3px rgba(0,0,0,.03)}
+  .when{font-size:12px;color:var(--muted);white-space:nowrap}
+  .rate-emoji{font-size:16px;line-height:1;flex:none;min-width:18px;text-align:center}
+  .batline{font-size:14px;line-height:1;letter-spacing:2px;flex:none;
+    max-width:200px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+  .toggle{flex:none;font-family:'Archivo Narrow',sans-serif;font-weight:700;font-size:12px;letter-spacing:.04em;
+    text-transform:uppercase;border:1px solid var(--line);border-radius:8px;padding:8px 11px;color:#C7CBD1;
+    background:var(--card);cursor:pointer;white-space:nowrap;transition:.15s}
+  .toggle:hover{border-color:#3A3F48}
+  .go{flex:none;font-family:'Archivo Narrow',sans-serif;font-weight:700;font-size:12px;letter-spacing:.04em;
+    text-transform:uppercase;text-decoration:none;border:1px solid var(--line);border-radius:8px;
+    padding:8px 11px;color:#C7CBD1;white-space:nowrap;transition:.15s}
+  .banner.pns .go:hover{background:var(--pns);color:#fff;border-color:var(--pns)}
+  .banner.mm .go:hover{background:var(--mm);color:#fff;border-color:var(--mm)}
+  /* ---- Tracker panel ---- */
+  .panel{display:none;padding:4px 15px 16px;border-top:1px dashed var(--line);background:#15181D}
+  .panel.open{display:block}
+  .panel-top{display:flex;flex-wrap:wrap;gap:14px;margin:14px 0 4px}
+  .fld{display:flex;flex-direction:column;gap:5px}
+  .fld label{font-family:'Archivo Narrow',sans-serif;font-weight:700;text-transform:uppercase;
+    letter-spacing:.05em;font-size:11px;color:var(--muted)}
+  .fld input,.fld select{font-family:inherit;font-size:14px;color:var(--ink);background:var(--card);
+    border:1px solid var(--line);border-radius:8px;padding:8px 10px;outline:0;min-width:170px}
+  .fld input:focus,.fld select:focus{border-color:#4A4F59}
+  select.rate[data-v="red"]{border-color:var(--r-red);color:var(--r-red);font-weight:600}
+  select.rate[data-v="yellow"]{border-color:var(--r-yellow);color:var(--r-yellow);font-weight:600}
+  select.rate[data-v="green"]{border-color:var(--r-green);color:var(--r-green);font-weight:600}
+  select.rate[data-v="okay"]{border-color:var(--r-okay);color:var(--r-okay);font-weight:600}
+  select.rate[data-v="excellent"]{border-color:var(--r-excellent);color:var(--r-excellent);font-weight:600}
+  .bat-head{font-family:'Archivo Narrow',sans-serif;font-weight:700;text-transform:uppercase;
+    letter-spacing:.06em;font-size:11px;color:var(--muted);margin:16px 0 8px}
+  .bat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(248px,1fr));gap:8px 14px}
+  .bat{display:flex;align-items:center;gap:10px}
+  .bat .bn{flex:1;font-size:13.5px;font-weight:500;min-width:0}
+  .bat select{flex:none;width:160px;font-family:inherit;font-size:13px;color:var(--ink);
+    background:var(--card);border:1px solid var(--line);border-radius:8px;padding:7px 8px;outline:0}
+  .bat select[data-v="low"]{border-color:var(--r-yellow);color:#E6A92E;font-weight:600}
+  .bat select[data-v="medium"]{border-color:var(--r-okay);color:var(--r-okay);font-weight:600}
+  .bat select[data-v="high"]{border-color:var(--r-green);color:var(--r-green);font-weight:600}
+  .bat select[data-v="restock"]{border-color:var(--r-red);color:var(--r-red);font-weight:600}
+  .empty{display:none;text-align:center;padding:48px 0;color:var(--muted)}
+  .empty.show{display:block}
+  footer{border-top:1px solid var(--line);margin-top:40px;padding:24px 0 60px;font-size:13px;color:var(--muted)}
+  footer b{color:#C7CBD1;font-weight:600}
+  @media (max-width:560px){
+    .go{display:none}
+    .store{padding:12px;flex-wrap:wrap}
+    .bat select{width:140px}
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <p class="eyebrow">Wisconsin Store Directory</p>
+    <h1><span class="red">Pick 'n Save</span> &amp; <span class="green">Metro Market</span></h1>
+    <p class="lede">Every location in the state — tap any address to open it in Google Maps, and hit <b>Check</b> on any store to log your visit date, rate it, and track battery inventory.</p>
+    <p class="meta">100 stores total &middot; 77 Pick 'n Save + 23 Metro Market &middot; Data current as of June 10, 2026</p>
+  </div>
+</header>
+<div class="controls">
+  <div class="wrap">
+    <label class="search">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"></circle><path d="m21 21-4.3-4.3"></path></svg>
+      <input id="q" type="search" placeholder="Search city, street, or ZIP…" autocomplete="off">
+    </label>
+    <div class="chips" role="group" aria-label="Filter by banner">
+      <button class="chip" data-f="all" aria-pressed="true">All</button>
+      <button class="chip pns" data-f="pns" aria-pressed="false">Pick 'n Save</button>
+      <button class="chip mm" data-f="mm" aria-pressed="false">Metro Market</button>
+    </div>
+    <div class="tools">
+      <button class="tbtn" id="exportBtn" title="Download your data as a backup file">Export</button>
+      <button class="tbtn" id="importBtn" title="Load data from a backup file">Import</button>
+      <input type="file" id="importFile" accept="application/json" style="display:none">
+    </div>
+    <span class="syncstat" id="syncStatus"></span>
+    <span class="count" id="count"></span>
+  </div>
+</div>
+<main class="wrap" id="app"></main>
+<div class="empty wrap" id="empty">No stores match that search. Try a city name or ZIP.</div>
+<footer>
+  <div class="wrap">
+    Addresses link to <b>Google Maps</b>. Your check dates, ratings, and inventory notes save automatically <b>in this browser</b> — use <b>Export</b> to back them up or move them to another device. Pick 'n Save and Metro Market are operated by <b>Roundy's Supermarkets</b>, a Kroger company. Store data verified June 10, 2026.
+  </div>
+</footer>
+<script>
+const PIN = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>';
+
+/* Your storefront batteries — edit names/keys here if your lineup changes */
+const BATTERIES = [
+  {k:"max-aaa-24",     n:"Energizer MAX AAA 24pk"},
+  {k:"ult-aa-8",       n:"Ultimate Lithium AA 8pk ($16.99)"},
+  {k:"ult-aa-8-alt",   n:"Ultimate Lithium AA 8pk ($23.98)"},
+  {k:"rechg-aa-8",     n:"Rechargeable AA 8pk"},
+  {k:"ult-aaa-8",      n:"Ultimate Lithium AAA 8pk"},
+  {k:"123-6",          n:"123 Lithium 6pk"},
+  {k:"123-4",          n:"123 Lithium 4pk"},
+  {k:"9v-1",           n:"Lithium 9V 1pk"}
+];
+const RATINGS = [
+  {v:"",          t:"— rate —"},
+  {v:"red",       t:"🚫"},
+  {v:"yellow",    t:"⚠️"},
+  {v:"green",     t:"✅"},
+  {v:"excellent", t:"🔥🔥🔥"}
+];
+const RATING_COLOR = {red:"#F2576A",yellow:"#F0B72E",green:"#4FB07B",okay:"#2563EB",excellent:"#A855F7"};
+const INV = [
+  {v:"",        t:"—"},
+  {v:"low",     t:"🪫"},
+  {v:"medium",  t:"⚠️"},
+  {v:"high",    t:"🔋"},
+  {v:"restock", t:"🛒"}
+];
+const RATING_EMOJI = Object.fromEntries(RATINGS.map(r=>[r.v,r.t]));
+const INV_EMOJI = Object.fromEntries(INV.map(r=>[r.v,r.t]));
+
+const PNS = [
+ ["406 Prosser Pl","Antigo","54409","(715) 623-7621"],
+ ["N135 Stoney Brook Rd","Appleton","54915","(920) 997-0232"],
+ ["2700 N Ballard Rd","Appleton","54911","(920) 993-0148"],
+ ["511 W Calumet St","Appleton","54915","(920) 734-0636"],
+ ["2400 W Wisconsin Ave","Appleton","54914","(920) 831-0333"],
+ ["2064 Lime Kiln Rd","Bellevue","54311","(920) 469-8293"],
+ ["17295 W Capitol Dr","Brookfield","53045","(262) 783-2080"],
+ ["15170 W Greenfield Ave","Brookfield","53005","(262) 782-2745"],
+ ["9200 N Green Bay Rd","Brown Deer","53209","(414) 354-6653"],
+ ["1008 Milwaukee Ave","Burlington","53105","(262) 763-3695"],
+ ["210 Dix St","Columbus","53925","(920) 623-2205"],
+ ["621 S Main St","Deforest","53532","(608) 846-8922"],
+ ["711 US Highway 45 N","Eagle River","54521","(715) 479-4416"],
+ ["3010 Cahill Main","Fitchburg","53711","(608) 271-2024"],
+ ["55 W Pioneer Rd","Fond Du Lac","54935","(920) 921-9898"],
+ ["760 W Johnson St","Fond Du Lac","54935","(920) 929-6510"],
+ ["1505 Madison Ave","Fort Atkinson","53538","(920) 568-2603"],
+ ["7201 S 76th St","Franklin","53132","(414) 427-8100"],
+ ["7780 S Lovers Lane Rd","Franklin","53132","(414) 425-5400"],
+ ["N112W16200 Mequon Rd","Germantown","53022","(262) 253-0841"],
+ ["301 Falls Rd","Grafton","53024","(262) 243-5900"],
+ ["1819 Main St","Green Bay","54302","(920) 468-0447"],
+ ["5800 S 108th St","Hales Corners","53130","(414) 427-8812"],
+ ["2811 18th St","Kenosha","53140","(262) 597-0110"],
+ ["5710 75th St","Kenosha","53142","(262) 697-4982"],
+ ["1312 Park St.","Madison","53715","(608) 257-3748"],
+ ["2502 Shopko Dr","Madison","53704","(608) 243-1000"],
+ ["3197 Maple Grove Dr","Madison","53719","(608) 410-7050"],
+ ["3300 Calumet Ave","Manitowoc","54220","(920) 682-6827"],
+ ["641 S Central Ave","Marshfield","54449","(715) 384-8716"],
+ ["5709 US Highway 51","Mcfarland","53558","(608) 838-3604"],
+ ["N77W14435 Appleton Ave","Menomonee Falls","53051","(262) 255-7598"],
+ ["605 E Lyon St","Milwaukee","53202","(414) 272-6677"],
+ ["250 W Holt Ave","Milwaukee","53207","(414) 294-2144"],
+ ["1100 E Garfield Ave","Milwaukee","53212","(414) 374-8621"],
+ ["7401 W Good Hope Rd","Milwaukee","53223","(414) 358-0011"],
+ ["5700 W Capitol Dr","Milwaukee","53216","(414) 873-3085"],
+ ["8151 W Bluemound Rd","Milwaukee","53213","(414) 771-9039"],
+ ["246 8th St","Monroe","53566","(608) 564-6950"],
+ ["2820 S Green Bay Rd","Mount Pleasant","53406","(262) 554-9630"],
+ ["1202 N Green Bay Rd","Mount Pleasant","53406","(262) 884-8749"],
+ ["S74 W17005 Janesville Rd","Muskego","53150","(262) 679-1931"],
+ ["3161 Village Square Dr","Nashotah","53029","(262) 369-1416"],
+ ["1530 S Commercial St","Neenah","54956","(920) 751-8842"],
+ ["828 Fox Point Plz","Neenah","54956","(920) 722-9427"],
+ ["15445 W National Ave","New Berlin","53151","(262) 789-1000"],
+ ["6462 S 27th St","Oak Creek","53154","(414) 761-1240"],
+ ["8770 S Howell Ave","Oak Creek","53154","(414) 571-9910"],
+ ["1940 S Koeller St","Oshkosh","54901","(920) 303-3300"],
+ ["1900 Jackson St","Oshkosh","54901","(920) 424-7820"],
+ ["1405 Capitol Dr","Pewaukee","53072","(262) 695-1156"],
+ ["256 S Lake Ave","Phillips","54555","(715) 260-7001"],
+ ["2643 Eastern Ave","Plymouth","53073","(920) 892-6648"],
+ ["5111 Douglas Ave","Racine","53402","(262) 752-0951"],
+ ["10101 Market St","Rothschild","54474","(715) 241-0191"],
+ ["4698 S Whitnall Ave","Saint Francis","53235","(414) 769-8801"],
+ ["2806 Schofield Ave","Schofield","54476","(715) 359-9123"],
+ ["1317 N 25th St","Sheboygan","53081","(920) 459-2802"],
+ ["1750 US Highway 51","Stoughton","53589","(608) 873-0171"],
+ ["1847 Egg Harbor Rd","Sturgeon Bay","54235","(920) 743-8830"],
+ ["640 E Main St","Sun Prairie","53590","(608) 837-7555"],
+ ["1010 22nd St","Two Rivers","54241","(920) 793-2266"],
+ ["405 N Wales Rd","Wales","53183","(262) 968-9460"],
+ ["515 N Milwaukee St","Waterford","53185","(262) 804-6060"],
+ ["624 S Church St","Watertown","53094","(920) 261-8281"],
+ ["1220 W Sunset Dr","Waukesha","53189","(262) 446-6980"],
+ ["220 E Sunset Dr","Waukesha","53189","(262) 547-7801"],
+ ["955 W Fulton St","Waupaca","54981","(715) 258-7624"],
+ ["205 Central Bridge St","Wausau","54401","(715) 849-1323"],
+ ["N2573 Plaza Rd","Wautoma","54982","(920) 787-2027"],
+ ["1717 N Mayfair Rd","Wauwatosa","53226","(414) 778-1839"],
+ ["2625 S 108th St","West Allis","53227","(414) 541-1333"],
+ ["6760 W National Ave","West Allis","53214","(414) 476-6061"],
+ ["1629 S Main St","West Bend","53095","(262) 338-5626"],
+ ["2518 W Washington St","West Bend","53095","(262) 338-5632"],
+ ["2201 Miller Park Way","West Milwaukee","53219","(414) 383-9755"],
+ ["900 E Riverview Expy","Wisconsin Rapids","54494","(715) 631-7180"]
+];
+const MM = [
+ ["17630 W Bluemound Rd","Brookfield","53045","(262) 784-2410"],
+ ["12735 W Capitol Dr","Brookfield","53005","(262) 783-7502"],
+ ["6969 N Port Washington Rd","Glendale","53217","(414) 351-0298"],
+ ["1291 Lombardi Access Rd","Green Bay","54304","(920) 498-9734"],
+ ["4279 S 76th St","Greenfield","53220","(414) 541-0061"],
+ ["261 Junction Rd","Madison","53717","(608) 829-2020"],
+ ["6010 Cottage Grove Rd","Madison","53718","(608) 223-0939"],
+ ["N95W18351 County Line Rd","Menomonee Falls","53051","(262) 255-4331"],
+ ["11558 N Port Washington Rd","Mequon","53092","(262) 241-6721"],
+ ["6800 Century Ave","Middleton","53562","(608) 831-3009"],
+ ["1123 N Van Buren St","Milwaukee","53202","(414) 273-1928"],
+ ["6540 Monona Dr","Monona","53716","(608) 222-9575"],
+ ["1010 N Rochester St","Mukwonago","53149","(262) 363-3026"],
+ ["1300 Pabst Farms Cir","Oconomowoc","53066","(262) 200-7425"],
+ ["N48W36903 E Wisconsin Ave","Oconomowoc","53066","(262) 569-3155"],
+ ["2160 Silvernail Rd","Pewaukee","53072","(262) 544-0072"],
+ ["1850 Plover Rd","Plover","54467","(715) 342-0011"],
+ ["4075 N Oakland Ave","Shorewood","53211","(414) 967-9218"],
+ ["3650 University Ave","Shorewood Hills","53705","(608) 231-6935"],
+ ["1500 Pinecrest Ave","Stevens Point","54481","(715) 345-1937"],
+ ["2538 Ironwood Dr","Sun Prairie","53590","(608) 837-2785"],
+ ["N65W24838 Main St","Sussex","53089","(262) 246-9151"],
+ ["6950 W State St","Wauwatosa","53213","(414) 475-7181"]
+];
+
+function maps(a,c,z){return "https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(a+", "+c+", WI, "+z);}
+function tel(p){return "tel:"+p.replace(/[^\d]/g,"");}
+function esc(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+function fmtDate(iso){ if(!iso) return ""; const p=iso.split("-"); return p.length===3 ? p[1]+"-"+p[2]+"-"+p[0].slice(2) : iso; }
+
+/* ---- persistence: local cache + optional OneDrive JSON sync file ---- */
+const LS_KEY = "pnsmm-tracker-v1";
+let DATA = {};
+try{ DATA = JSON.parse(localStorage.getItem(LS_KEY) || "{}"); }catch(e){ DATA = {}; }
+function rec(id){ if(!DATA[id]) DATA[id]={date:"",rating:"",inv:{},_ts:0}; if(!DATA[id].inv) DATA[id].inv={}; return DATA[id]; }
+function touch(id){ rec(id)._ts = Date.now(); }
+function idOf(key,a,z){ return key+"|"+a+"|"+z; }
+
+/* ===== Cloud sync via Firebase Realtime Database — always on, every device ===== */
+const DATA_URL="https://picknsave-tracker-default-rtdb.firebaseio.com/data.json";
+let pushTimer=null, pollTimer=null;
+
+function nowt(){ return new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
+function setSync(m){ const el=document.getElementById('syncStatus'); if(el) el.textContent=m; }
+
+function save(){
+  try{ localStorage.setItem(LS_KEY, JSON.stringify(DATA)); }catch(e){}
+  clearTimeout(pushTimer); pushTimer=setTimeout(pushCloud,700);
+}
+/* merge by per-store _ts so edits from another device aren't clobbered */
+function mergeData(a,b){
+  const out={}, ids=new Set([...Object.keys(a||{}),...Object.keys(b||{})]);
+  ids.forEach(id=>{ const ra=a&&a[id], rb=b&&b[id];
+    out[id] = (ra&&rb) ? (((rb._ts||0)>(ra._ts||0))?rb:ra) : (ra||rb); });
+  return out;
+}
+async function pushCloud(){
+  try{
+    const r=await fetch(DATA_URL,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(JSON.stringify(DATA))});
+    setSync(r.ok ? ("✓ synced "+nowt()) : "⚠️ sync error");
+  }catch(e){ setSync("⚠️ offline — will retry"); }
+}
+async function pullCloud(announce){
+  try{
+    const r=await fetch(DATA_URL);
+    if(!r.ok){ if(announce) setSync("⚠️ couldn't reach cloud"); return; }
+    const raw=await r.json();                 // stored as a JSON string, or null
+    const remote = raw ? JSON.parse(raw) : {};
+    DATA=mergeData(DATA, remote);
+    try{ localStorage.setItem(LS_KEY,JSON.stringify(DATA)); }catch(e){}
+    render();
+    if(announce) setSync("✓ up to date "+nowt());
+  }catch(e){ if(announce) setSync("⚠️ offline"); }
+}
+function startPoll(){ clearInterval(pollTimer); pollTimer=setInterval(()=>pullCloud(true),15000); }
+async function initCloud(){
+  setSync("connecting…");
+  await pullCloud(false);   // pull remote + merge with anything local
+  await pushCloud();        // push the merged result back
+  setSync("✓ synced "+nowt());
+  startPoll();
+}
+
+const banners=[{key:"pns",tag:"Pick 'n Save",rows:PNS},{key:"mm",tag:"Metro Market",rows:MM}];
+const app=document.getElementById('app');
+const countEl=document.getElementById('count');
+const emptyEl=document.getElementById('empty');
+let filter="all", query="", openSet=new Set();
+
+function ratingSelect(id,val){
+  let o=RATINGS.map(r=>'<option value="'+r.v+'"'+(r.v===val?' selected':'')+'>'+r.t+'</option>').join('');
+  return '<select class="rate" data-id="'+esc(id)+'" data-v="'+esc(val)+'">'+o+'</select>';
+}
+function invSelect(id,bk,val){
+  let o=INV.map(r=>'<option value="'+r.v+'"'+(r.v===val?' selected':'')+'>'+r.t+'</option>').join('');
+  return '<select data-id="'+esc(id)+'" data-bk="'+esc(bk)+'" data-v="'+esc(val)+'">'+o+'</select>';
+}
+function restockCount(r){ return BATTERIES.reduce((n,b)=>n+(r.inv[b.k]==="restock"?1:0),0); }
+function batLine(r){ return BATTERIES.map(b=>r.inv[b.k]?INV_EMOJI[r.inv[b.k]]:"").filter(Boolean).join(" "); }
+
+function render(){
+  app.innerHTML="";
+  let shown=0;
+  const q=query.trim().toLowerCase();
+  banners.forEach(b=>{
+    if(filter!=="all"&&filter!==b.key) return;
+    const matches=b.rows.filter(r=>!q||(r[0]+" "+r[1]+" "+r[2]).toLowerCase().includes(q));
+    if(!matches.length) return;
+    shown+=matches.length;
+    const sec=document.createElement('section');
+    sec.className="banner "+b.key;
+    sec.innerHTML='<div class="banner-head"><span class="banner-tag">'+b.tag+'</span><h2>Wisconsin</h2><span class="n">'+matches.length+' of '+b.rows.length+'</span></div>';
+    let lastCity=null;
+    matches.forEach(r=>{
+      const [a,c,z,p]=r;
+      if(c!==lastCity){const h=document.createElement('div');h.className="city";h.textContent=c;sec.appendChild(h);lastCity=c;}
+      const id=idOf(b.key,a,z);
+      const d=rec(id);
+      const isOpen=openSet.has(id);
+      const dotColor=d.rating?RATING_COLOR[d.rating]:"#3A3F48";
+      const rc=restockCount(d);
+      const wrap=document.createElement('div');
+      wrap.className="store-wrap";
+      wrap.style.borderLeftColor=dotColor;
+      wrap.dataset.id=id;
+
+      const batRows=BATTERIES.map(bt=>
+        '<div class="bat"><span class="bn">'+esc(bt.n)+'</span>'+invSelect(id,bt.k,d.inv[bt.k]||"")+'</div>'
+      ).join('');
+
+      wrap.innerHTML=
+        '<div class="store">'+
+          '<span class="pin">'+PIN+'</span>'+
+          '<div class="info">'+
+            '<a class="addr" href="'+maps(a,c,z)+'" target="_blank" rel="noopener">'+esc(a)+'</a>'+
+            '<div class="sub">'+esc(c)+', WI '+esc(z)+' &middot; <a href="'+tel(p)+'">'+esc(p)+'</a></div>'+
+          '</div>'+
+          '<div class="rowmeta">'+
+            '<span class="rate-emoji">'+(d.rating?RATING_EMOJI[d.rating]:'')+'</span>'+
+            '<span class="when">'+(d.date?esc(fmtDate(d.date)):'')+'</span>'+
+            '<button class="toggle">'+(isOpen?'Close':'Check')+'</button>'+
+            '<a class="go" href="'+maps(a,c,z)+'" target="_blank" rel="noopener">Map ↗</a>'+
+          '</div>'+
+        '</div>'+
+        '<div class="panel'+(isOpen?' open':'')+'">'+
+          '<div class="panel-top">'+
+            '<div class="fld"><label>Date checked</label><input type="date" class="dt" data-id="'+esc(id)+'" value="'+esc(d.date||"")+'"></div>'+
+            '<div class="fld"><label>Store rating</label>'+ratingSelect(id,d.rating||"")+'</div>'+
+          '</div>'+
+          '<div class="bat-head">Battery inventory</div>'+
+          '<div class="bat-grid">'+batRows+'</div>'+
+        '</div>';
+
+      // toggle expand
+      wrap.querySelector('.toggle').addEventListener('click',function(){
+        const panel=wrap.querySelector('.panel');
+        const nowOpen=!panel.classList.contains('open');
+        panel.classList.toggle('open',nowOpen);
+        this.textContent=nowOpen?'Close':'Check';
+        if(nowOpen) openSet.add(id); else openSet.delete(id);
+      });
+      // date
+      wrap.querySelector('.dt').addEventListener('change',function(){
+        rec(id).date=this.value; touch(id); save();
+        wrap.querySelector('.when').textContent=fmtDate(this.value);
+      });
+      // rating
+      const rsel=wrap.querySelector('select.rate');
+      rsel.addEventListener('change',function(){
+        rec(id).rating=this.value; touch(id); save();
+        this.dataset.v=this.value;
+        const col=this.value?RATING_COLOR[this.value]:"#3A3F48";
+        wrap.querySelector('.rate-emoji').textContent=this.value?RATING_EMOJI[this.value]:'';
+        wrap.style.borderLeftColor=col;
+      });
+      // inventory
+      wrap.querySelectorAll('.bat select').forEach(sel=>{
+        sel.addEventListener('change',function(){
+          rec(id).inv[this.dataset.bk]=this.value; touch(id); save();
+          this.dataset.v=this.value;
+        });
+      });
+
+      sec.appendChild(wrap);
+    });
+    app.appendChild(sec);
+  });
+  emptyEl.classList.toggle('show',shown===0);
+  countEl.textContent=shown+(shown===1?" store":" stores");
+}
+
+document.getElementById('q').addEventListener('input',e=>{query=e.target.value;render();});
+document.querySelectorAll('.chip').forEach(ch=>{
+  ch.addEventListener('click',()=>{
+    filter=ch.dataset.f;
+    document.querySelectorAll('.chip').forEach(c=>c.setAttribute('aria-pressed',c===ch?"true":"false"));
+    render();
+  });
+});
+
+/* export / import */
+document.getElementById('exportBtn').addEventListener('click',()=>{
+  const blob=new Blob([JSON.stringify(DATA,null,2)],{type:"application/json"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download="pns-mm-tracker-"+new Date().toISOString().slice(0,10)+".json";
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+});
+document.getElementById('importBtn').addEventListener('click',()=>document.getElementById('importFile').click());
+document.getElementById('importFile').addEventListener('change',function(){
+  const f=this.files[0]; if(!f) return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    try{
+      const obj=JSON.parse(reader.result);
+      if(obj&&typeof obj==="object"){ DATA=obj; save(); render(); alert("Data imported."); }
+      else alert("That file didn't look like tracker data.");
+    }catch(e){ alert("Couldn't read that file."); }
+  };
+  reader.readAsText(f);
+  this.value="";
+});
+
+window.addEventListener('focus', ()=>pullCloud(true));
+
+render();
+initCloud();
+</script>
+</body>
+</html>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
