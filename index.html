@@ -142,7 +142,7 @@
 <div class="empty wrap" id="empty">No stores match that search. Try a city name or ZIP.</div>
 <footer>
   <div class="wrap">
-    Addresses link to <b>Google Maps</b>. Your check dates, ratings, and inventory notes sync automatically across your devices via the cloud — use <b>Export</b> for a backup. Pick 'n Save and Metro Market are operated by <b>Roundy's Supermarkets</b>, a Kroger company. Store data verified June 10, 2026.
+    Addresses link to <b>Google Maps</b>. Distances are driving miles + approx. time from your location (or Port Washington), measured ZIP-to-ZIP. Your check dates, ratings, and inventory notes sync automatically across your devices via the cloud — use <b>Export</b> for a backup. Pick 'n Save and Metro Market are operated by <b>Roundy's Supermarkets</b>, a Kroger company.
   </div>
 </footer>
 <script>
@@ -332,10 +332,12 @@ const ORIGIN_ZIP="53074";
 const ALL_ZIPS=[...new Set([...PNS,...MM].map(r=>r[2]))];
 let zipCoords={}; try{ zipCoords=JSON.parse(localStorage.getItem("pnsmm-zip")||"{}"); }catch(e){ zipCoords={}; }
 let distMap={};
+let driveMap={};
 let originCoords=null;
 function milesBetween(a,b){ const R=3958.8,toR=x=>x*Math.PI/180; const dLat=toR(b.lat-a.lat),dLng=toR(b.lng-a.lng); const s=Math.sin(dLat/2)**2+Math.cos(toR(a.lat))*Math.cos(toR(b.lat))*Math.sin(dLng/2)**2; return 2*R*Math.asin(Math.sqrt(s)); }
 function computeDistMap(){ const o=originCoords||zipCoords[ORIGIN_ZIP]; if(!o) return; distMap={}; ALL_ZIPS.forEach(z=>{ if(zipCoords[z]) distMap[z]=Math.round(milesBetween(o,zipCoords[z])); }); }
-function fmtDist(z){ return (distMap[z]!=null) ? ("🚗 ~"+distMap[z]+" mi") : "…"; }
+function fmtMin(s){ const m=Math.round(s/60); return m>=60 ? (Math.floor(m/60)+"h "+(m%60)+"m") : (m+"m"); }
+function fmtDist(z){ const d=driveMap[z]; if(d) return "🚗 "+d.mi+" mi · "+d.t; return (distMap[z]!=null) ? ("🚗 ~"+distMap[z]+" mi") : "…"; }
 async function ensureDistances(){
   const need=[...new Set([ORIGIN_ZIP,...ALL_ZIPS])].filter(z=>!zipCoords[z]);
   if(need.length){
@@ -346,6 +348,24 @@ async function ensureDistances(){
   }
   computeDistMap();
   document.querySelectorAll('.dist').forEach(el=>{ el.textContent=fmtDist(el.dataset.zip); });
+}
+async function ensureDriving(){
+  const o=originCoords||zipCoords[ORIGIN_ZIP];
+  if(!o) return;
+  const zips=ALL_ZIPS.filter(z=>zipCoords[z]);
+  if(!zips.length) return;
+  const coords=[o,...zips.map(z=>zipCoords[z])].map(c=>c.lng+","+c.lat).join(";");
+  try{
+    const r=await fetch("https://router.project-osrm.org/table/v1/driving/"+coords+"?sources=0&annotations=distance,duration");
+    if(!r.ok) return;
+    const j=await r.json();
+    if(j.code!=="Ok"||!j.distances||!j.durations) return;
+    const dist=j.distances[0], dur=j.durations[0];
+    const dm={};
+    zips.forEach((z,i)=>{ const m=dist[i+1], s=dur[i+1]; if(m!=null&&s!=null){ dm[z]={mi:Math.round(m/1609.34), t:fmtMin(s)}; } });
+    driveMap=dm;
+    updateDistSpans();
+  }catch(e){}
 }
 function updateDistSpans(){ document.querySelectorAll('.dist').forEach(el=>{ el.textContent=fmtDist(el.dataset.zip); }); }
 function setMyLoc(html){ const el=document.getElementById('myLoc'); if(el){ el.innerHTML=html; el.style.display=html?'':'none'; } }
@@ -366,12 +386,12 @@ function useMyLocation(){
   if(!navigator.geolocation){ alert("Your browser can't share location."); return; }
   setSync("📍 getting your location…");
   navigator.geolocation.getCurrentPosition(
-    pos=>{ const la=pos.coords.latitude, ln=pos.coords.longitude; originCoords={lat:la,lng:ln}; computeDistMap(); updateDistSpans(); setSync("📍 distances from your location"); showMyLocationAddress(la,ln); },
+    pos=>{ const la=pos.coords.latitude, ln=pos.coords.longitude; originCoords={lat:la,lng:ln}; driveMap={}; computeDistMap(); updateDistSpans(); setSync("📍 distances from your location"); showMyLocationAddress(la,ln); ensureDriving(); },
     err=>{ setSync("⚠️ location unavailable"); alert("Couldn't get your location — make sure location access is allowed for this site."); },
     {enableHighAccuracy:true, timeout:10000, maximumAge:60000}
   );
 }
-function useHome(){ originCoords=null; computeDistMap(); updateDistSpans(); setMyLoc(''); setSync("🏠 distances from Port Washington"); }
+function useHome(){ originCoords=null; driveMap={}; computeDistMap(); updateDistSpans(); setMyLoc(''); setSync("🏠 distances from Port Washington"); ensureDriving(); }
 computeDistMap();
 const banners=[{key:"pns",tag:"Pick 'n Save",rows:PNS},{key:"mm",tag:"Metro Market",rows:MM}];
 const app=document.getElementById('app');
@@ -503,7 +523,7 @@ document.getElementById('homeBtn').addEventListener('click', useHome);
 window.addEventListener('focus', ()=>pullCloud(true));
 render();
 initCloud();
-ensureDistances();
+ensureDistances().then(ensureDriving);
 </script>
 </body>
 </html>
