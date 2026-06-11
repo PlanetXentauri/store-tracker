@@ -48,6 +48,8 @@
   .tbtn{font-family:'Archivo Narrow',sans-serif;font-weight:700;font-size:12px;letter-spacing:.03em;text-transform:uppercase;border:1px solid var(--line);background:var(--card);color:#C7CBD1;padding:8px 11px;border-radius:8px;cursor:pointer;transition:.15s}
   .tbtn:hover{border-color:#3A3F48;background:#22262E}
   .syncstat{font-size:12px;color:var(--muted);white-space:nowrap}
+  .myloc{width:100%;font-size:12.5px;color:var(--mm)}
+  .myloc a{color:var(--mm);text-decoration:underline}
   .count{width:100%;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
   .banner{margin:30px 0 8px}
   .banner-head{display:flex;align-items:baseline;gap:12px;padding-bottom:8px}
@@ -132,6 +134,7 @@
       <input type="file" id="importFile" accept="application/json" style="display:none">
     </div>
     <span class="syncstat" id="syncStatus"></span>
+    <span class="myloc" id="myLoc" style="display:none"></span>
     <span class="count" id="count"></span>
   </div>
 </div>
@@ -345,16 +348,30 @@ async function ensureDistances(){
   document.querySelectorAll('.dist').forEach(el=>{ el.textContent=fmtDist(el.dataset.zip); });
 }
 function updateDistSpans(){ document.querySelectorAll('.dist').forEach(el=>{ el.textContent=fmtDist(el.dataset.zip); }); }
+function setMyLoc(html){ const el=document.getElementById('myLoc'); if(el){ el.innerHTML=html; el.style.display=html?'':'none'; } }
+async function showMyLocationAddress(lat,lng){
+  const gmaps="https://www.google.com/maps/search/?api=1&query="+lat+","+lng;
+  const coords=lat.toFixed(5)+", "+lng.toFixed(5);
+  setMyLoc('📍 Your location: <a href="'+gmaps+'" target="_blank" rel="noopener">finding address…</a>');
+  try{
+    const r=await fetch("https://nominatim.openstreetmap.org/reverse?format=json&zoom=18&addressdetails=0&lat="+lat+"&lon="+lng,{headers:{"Accept":"application/json"}});
+    const j=await r.json();
+    const a=(j&&j.display_name)?j.display_name:coords;
+    setMyLoc('📍 Your location: <a href="'+gmaps+'" target="_blank" rel="noopener">'+esc(a)+'</a>');
+  }catch(e){
+    setMyLoc('📍 Your location: <a href="'+gmaps+'" target="_blank" rel="noopener">'+esc(coords)+'</a>');
+  }
+}
 function useMyLocation(){
   if(!navigator.geolocation){ alert("Your browser can't share location."); return; }
   setSync("📍 getting your location…");
   navigator.geolocation.getCurrentPosition(
-    pos=>{ originCoords={lat:pos.coords.latitude,lng:pos.coords.longitude}; computeDistMap(); updateDistSpans(); setSync("📍 distances from your location"); },
+    pos=>{ const la=pos.coords.latitude, ln=pos.coords.longitude; originCoords={lat:la,lng:ln}; computeDistMap(); updateDistSpans(); setSync("📍 distances from your location"); showMyLocationAddress(la,ln); },
     err=>{ setSync("⚠️ location unavailable"); alert("Couldn't get your location — make sure location access is allowed for this site."); },
     {enableHighAccuracy:true, timeout:10000, maximumAge:60000}
   );
 }
-function useHome(){ originCoords=null; computeDistMap(); updateDistSpans(); setSync("🏠 distances from Port Washington"); }
+function useHome(){ originCoords=null; computeDistMap(); updateDistSpans(); setMyLoc(''); setSync("🏠 distances from Port Washington"); }
 computeDistMap();
 const banners=[{key:"pns",tag:"Pick 'n Save",rows:PNS},{key:"mm",tag:"Metro Market",rows:MM}];
 const app=document.getElementById('app');
