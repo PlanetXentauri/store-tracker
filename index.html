@@ -62,12 +62,12 @@
   .store-wrap:hover{border-color:#3A3F48}
   .store{display:flex;align-items:center;gap:14px;padding:13px 15px}
   .pin{flex:none;width:34px;height:34px;border-radius:9px;display:grid;place-items:center}
-  .banner.pns .pin{background:var(--pns-soft);color:var(--pns)}
-  .banner.mm .pin{background:var(--mm-soft);color:var(--mm)}
+  .banner.pns .pin,.store-wrap.pns .pin{background:var(--pns-soft);color:var(--pns)}
+  .banner.mm .pin,.store-wrap.mm .pin{background:var(--mm-soft);color:var(--mm)}
   .info{flex:1;min-width:0}
   .addr{font-weight:600;font-size:16px;text-decoration:none;color:var(--ink);display:inline-block;border-bottom:2px solid transparent;transition:.15s}
-  .banner.pns .addr:hover{color:var(--pns);border-color:var(--pns)}
-  .banner.mm .addr:hover{color:var(--mm);border-color:var(--mm)}
+  .banner.pns .addr:hover,.store-wrap.pns .addr:hover{color:var(--pns);border-color:var(--pns)}
+  .banner.mm .addr:hover,.store-wrap.mm .addr:hover{color:var(--mm);border-color:var(--mm)}
   .sub{font-size:13px;color:var(--muted);margin-top:2px}
   .sub a{color:var(--muted);text-decoration:none}
   .sub a:hover{text-decoration:underline}
@@ -77,8 +77,8 @@
   .toggle{flex:none;font-family:'Archivo Narrow',sans-serif;font-weight:700;font-size:12px;letter-spacing:.04em;text-transform:uppercase;border:1px solid var(--line);border-radius:8px;padding:8px 11px;color:#C7CBD1;background:var(--card);cursor:pointer;white-space:nowrap;transition:.15s}
   .toggle:hover{border-color:#3A3F48}
   .go{flex:none;font-family:'Archivo Narrow',sans-serif;font-weight:700;font-size:12px;letter-spacing:.04em;text-transform:uppercase;text-decoration:none;border:1px solid var(--line);border-radius:8px;padding:8px 11px;color:#C7CBD1;white-space:nowrap;transition:.15s}
-  .banner.pns .go:hover{background:var(--pns);color:#fff;border-color:var(--pns)}
-  .banner.mm .go:hover{background:var(--mm);color:#fff;border-color:var(--mm)}
+  .banner.pns .go:hover,.store-wrap.pns .go:hover{background:var(--pns);color:#fff;border-color:var(--pns)}
+  .banner.mm .go:hover,.store-wrap.mm .go:hover{background:var(--mm);color:#fff;border-color:var(--mm)}
   .panel{display:none;padding:4px 15px 16px;border-top:1px dashed var(--line);background:#15181D}
   .panel.open{display:block}
   .panel-top{display:flex;flex-wrap:wrap;gap:14px;margin:14px 0 4px}
@@ -127,8 +127,8 @@
       <button class="chip mm" data-f="mm" aria-pressed="false">Metro Market</button>
     </div>
     <div class="tools">
-      <button class="tbtn" id="locBtn" title="Recalculate every distance from your current location">📍 My location</button>
-      <button class="tbtn" id="homeBtn" title="Use your home address (Port Washington) for distances">🏠 Home</button>
+      <button class="tbtn" id="locBtn" title="Sort stores nearest-first from your current location">📍 My location</button>
+      <button class="tbtn" id="homeBtn" title="Back to the normal list, distances from Port Washington">🏠 Home</button>
       <button class="tbtn" id="exportBtn" title="Download your data as a backup file">Export</button>
       <button class="tbtn" id="importBtn" title="Load data from a backup file">Import</button>
       <input type="file" id="importFile" accept="application/json" style="display:none">
@@ -334,8 +334,10 @@ let zipCoords={}; try{ zipCoords=JSON.parse(localStorage.getItem("pnsmm-zip")||"
 let distMap={};
 let driveMap={};
 let originCoords=null;
+let sortByDistance=false;
 function milesBetween(a,b){ const R=3958.8,toR=x=>x*Math.PI/180; const dLat=toR(b.lat-a.lat),dLng=toR(b.lng-a.lng); const s=Math.sin(dLat/2)**2+Math.cos(toR(a.lat))*Math.cos(toR(b.lat))*Math.sin(dLng/2)**2; return 2*R*Math.asin(Math.sqrt(s)); }
 function computeDistMap(){ const o=originCoords||zipCoords[ORIGIN_ZIP]; if(!o) return; distMap={}; ALL_ZIPS.forEach(z=>{ if(zipCoords[z]) distMap[z]=Math.round(milesBetween(o,zipCoords[z])); }); }
+function distVal(z){ if(driveMap[z]) return driveMap[z].mi; if(distMap[z]!=null) return distMap[z]; return 1e9; }
 function fmtMin(s){ const m=Math.round(s/60); return m>=60 ? (Math.floor(m/60)+"h "+(m%60)+"m") : (m+"m"); }
 function fmtDist(z){ const d=driveMap[z]; if(d) return "🚗 "+d.mi+" mi · "+d.t; return (distMap[z]!=null) ? ("🚗 ~"+distMap[z]+" mi") : "…"; }
 async function ensureDistances(){
@@ -347,7 +349,7 @@ async function ensureDistances(){
     try{ localStorage.setItem("pnsmm-zip", JSON.stringify(zipCoords)); }catch(e){}
   }
   computeDistMap();
-  document.querySelectorAll('.dist').forEach(el=>{ el.textContent=fmtDist(el.dataset.zip); });
+  if(sortByDistance) render(); else updateDistSpans();
 }
 async function ensureDriving(){
   const o=originCoords||zipCoords[ORIGIN_ZIP];
@@ -364,7 +366,7 @@ async function ensureDriving(){
     const dm={};
     zips.forEach((z,i)=>{ const m=dist[i+1], s=dur[i+1]; if(m!=null&&s!=null){ dm[z]={mi:Math.round(m/1609.34), t:fmtMin(s)}; } });
     driveMap=dm;
-    updateDistSpans();
+    if(sortByDistance) render(); else updateDistSpans();
   }catch(e){}
 }
 function updateDistSpans(){ document.querySelectorAll('.dist').forEach(el=>{ el.textContent=fmtDist(el.dataset.zip); }); }
@@ -386,14 +388,15 @@ function useMyLocation(){
   if(!navigator.geolocation){ alert("Your browser can't share location."); return; }
   setSync("📍 getting your location…");
   navigator.geolocation.getCurrentPosition(
-    pos=>{ const la=pos.coords.latitude, ln=pos.coords.longitude; originCoords={lat:la,lng:ln}; driveMap={}; computeDistMap(); updateDistSpans(); setSync("📍 distances from your location"); showMyLocationAddress(la,ln); ensureDriving(); },
+    pos=>{ const la=pos.coords.latitude, ln=pos.coords.longitude; originCoords={lat:la,lng:ln}; sortByDistance=true; driveMap={}; computeDistMap(); render(); setSync("📍 sorted nearest-first from your location"); showMyLocationAddress(la,ln); ensureDriving(); },
     err=>{ setSync("⚠️ location unavailable"); alert("Couldn't get your location — make sure location access is allowed for this site."); },
     {enableHighAccuracy:true, timeout:10000, maximumAge:60000}
   );
 }
-function useHome(){ originCoords=null; driveMap={}; computeDistMap(); updateDistSpans(); setMyLoc(''); setSync("🏠 distances from Port Washington"); ensureDriving(); }
+function useHome(){ originCoords=null; sortByDistance=false; driveMap={}; computeDistMap(); render(); setMyLoc(''); setSync("🏠 distances from Port Washington"); ensureDriving(); }
 computeDistMap();
 const banners=[{key:"pns",tag:"Pick 'n Save",rows:PNS},{key:"mm",tag:"Metro Market",rows:MM}];
+const bannerTag={pns:"Pick 'n Save", mm:"Metro Market"};
 const app=document.getElementById('app');
 const countEl=document.getElementById('count');
 const emptyEl=document.getElementById('empty');
@@ -406,86 +409,97 @@ function invSelect(id,bk,val){
   let o=INV.map(r=>'<option value="'+r.v+'"'+(r.v===val?' selected':'')+'>'+r.t+'</option>').join('');
   return '<select data-id="'+esc(id)+'" data-bk="'+esc(bk)+'" data-v="'+esc(val)+'">'+o+'</select>';
 }
-function restockCount(r){ return BATTERIES.reduce((n,b)=>n+(r.inv[b.k]==="restock"?1:0),0); }
-function batLine(r){ return BATTERIES.map(b=>r.inv[b.k]?INV_EMOJI[r.inv[b.k]]:"").filter(Boolean).join(" "); }
+function buildStore(bkey, r){
+  const [a,c,z,p]=r;
+  const id=idOf(bkey,a,z);
+  const d=rec(id);
+  const isOpen=openSet.has(id);
+  const dotColor=d.rating?RATING_COLOR[d.rating]:"#3A3F48";
+  const wrap=document.createElement('div');
+  wrap.className="store-wrap "+bkey;
+  wrap.style.borderLeftColor=dotColor;
+  wrap.dataset.id=id;
+  const batRows=BATTERIES.map(bt=>
+    '<div class="bat"><span class="bn">'+esc(bt.n)+'</span>'+invSelect(id,bt.k,d.inv[bt.k]||"")+'</div>'
+  ).join('');
+  wrap.innerHTML=
+    '<div class="store">'+
+      '<span class="pin">'+PIN+'</span>'+
+      '<div class="info">'+
+        '<a class="addr" href="'+maps(a,c,z)+'" target="_blank" rel="noopener">'+esc(a)+'</a>'+
+        '<div class="sub">'+esc(c)+', WI '+esc(z)+' &middot; <a href="'+tel(p)+'">'+esc(p)+'</a> &middot; <span class="dist" data-zip="'+esc(z)+'">'+fmtDist(z)+'</span></div>'+
+      '</div>'+
+      '<div class="rowmeta">'+
+        '<span class="rate-emoji">'+(d.rating?RATING_EMOJI[d.rating]:'')+'</span>'+
+        '<span class="when">'+(d.date?esc(fmtDate(d.date)):'')+'</span>'+
+        '<button class="toggle">'+(isOpen?'Close':'Check')+'</button>'+
+        '<a class="go" href="'+maps(a,c,z)+'" target="_blank" rel="noopener">Map ↗</a>'+
+      '</div>'+
+    '</div>'+
+    '<div class="panel'+(isOpen?' open':'')+'">'+
+      '<div class="panel-top">'+
+        '<div class="fld"><label>Date checked</label><input type="date" class="dt" data-id="'+esc(id)+'" value="'+esc(d.date||"")+'"></div>'+
+        '<div class="fld"><label>Store rating</label>'+ratingSelect(id,d.rating||"")+'</div>'+
+      '</div>'+
+      '<div class="bat-head">Battery inventory</div>'+
+      '<div class="bat-grid">'+batRows+'</div>'+
+    '</div>';
+  wrap.querySelector('.toggle').addEventListener('click',function(){
+    const panel=wrap.querySelector('.panel');
+    const nowOpen=!panel.classList.contains('open');
+    panel.classList.toggle('open',nowOpen);
+    this.textContent=nowOpen?'Close':'Check';
+    if(nowOpen) openSet.add(id); else openSet.delete(id);
+  });
+  wrap.querySelector('.dt').addEventListener('change',function(){
+    rec(id).date=this.value; touch(id); save();
+    wrap.querySelector('.when').textContent=fmtDate(this.value);
+  });
+  const rsel=wrap.querySelector('select.rate');
+  rsel.addEventListener('change',function(){
+    rec(id).rating=this.value; touch(id); save();
+    this.dataset.v=this.value;
+    const col=this.value?RATING_COLOR[this.value]:"#3A3F48";
+    wrap.querySelector('.rate-emoji').textContent=this.value?RATING_EMOJI[this.value]:'';
+    wrap.style.borderLeftColor=col;
+  });
+  wrap.querySelectorAll('.bat select').forEach(sel=>{
+    sel.addEventListener('change',function(){
+      rec(id).inv[this.dataset.bk]=this.value; touch(id); save();
+      this.dataset.v=this.value;
+    });
+  });
+  return wrap;
+}
 function render(){
   app.innerHTML="";
-  let shown=0;
   const q=query.trim().toLowerCase();
+  let items=[];
   banners.forEach(b=>{
     if(filter!=="all"&&filter!==b.key) return;
-    const matches=b.rows.filter(r=>!q||(r[0]+" "+r[1]+" "+r[2]).toLowerCase().includes(q));
-    if(!matches.length) return;
-    shown+=matches.length;
-    const sec=document.createElement('section');
-    sec.className="banner "+b.key;
-    sec.innerHTML='<div class="banner-head"><span class="banner-tag">'+b.tag+'</span><h2>Wisconsin</h2><span class="n">'+matches.length+' of '+b.rows.length+'</span></div>';
-    let lastCity=null;
-    matches.forEach(r=>{
-      const [a,c,z,p]=r;
-      if(c!==lastCity){const h=document.createElement('div');h.className="city";h.textContent=c;sec.appendChild(h);lastCity=c;}
-      const id=idOf(b.key,a,z);
-      const d=rec(id);
-      const isOpen=openSet.has(id);
-      const dotColor=d.rating?RATING_COLOR[d.rating]:"#3A3F48";
-      const wrap=document.createElement('div');
-      wrap.className="store-wrap";
-      wrap.style.borderLeftColor=dotColor;
-      wrap.dataset.id=id;
-      const batRows=BATTERIES.map(bt=>
-        '<div class="bat"><span class="bn">'+esc(bt.n)+'</span>'+invSelect(id,bt.k,d.inv[bt.k]||"")+'</div>'
-      ).join('');
-      wrap.innerHTML=
-        '<div class="store">'+
-          '<span class="pin">'+PIN+'</span>'+
-          '<div class="info">'+
-            '<a class="addr" href="'+maps(a,c,z)+'" target="_blank" rel="noopener">'+esc(a)+'</a>'+
-            '<div class="sub">'+esc(c)+', WI '+esc(z)+' &middot; <a href="'+tel(p)+'">'+esc(p)+'</a> &middot; <span class="dist" data-zip="'+esc(z)+'">'+fmtDist(z)+'</span></div>'+
-          '</div>'+
-          '<div class="rowmeta">'+
-            '<span class="rate-emoji">'+(d.rating?RATING_EMOJI[d.rating]:'')+'</span>'+
-            '<span class="when">'+(d.date?esc(fmtDate(d.date)):'')+'</span>'+
-            '<button class="toggle">'+(isOpen?'Close':'Check')+'</button>'+
-            '<a class="go" href="'+maps(a,c,z)+'" target="_blank" rel="noopener">Map ↗</a>'+
-          '</div>'+
-        '</div>'+
-        '<div class="panel'+(isOpen?' open':'')+'">'+
-          '<div class="panel-top">'+
-            '<div class="fld"><label>Date checked</label><input type="date" class="dt" data-id="'+esc(id)+'" value="'+esc(d.date||"")+'"></div>'+
-            '<div class="fld"><label>Store rating</label>'+ratingSelect(id,d.rating||"")+'</div>'+
-          '</div>'+
-          '<div class="bat-head">Battery inventory</div>'+
-          '<div class="bat-grid">'+batRows+'</div>'+
-        '</div>';
-      wrap.querySelector('.toggle').addEventListener('click',function(){
-        const panel=wrap.querySelector('.panel');
-        const nowOpen=!panel.classList.contains('open');
-        panel.classList.toggle('open',nowOpen);
-        this.textContent=nowOpen?'Close':'Check';
-        if(nowOpen) openSet.add(id); else openSet.delete(id);
-      });
-      wrap.querySelector('.dt').addEventListener('change',function(){
-        rec(id).date=this.value; touch(id); save();
-        wrap.querySelector('.when').textContent=fmtDate(this.value);
-      });
-      const rsel=wrap.querySelector('select.rate');
-      rsel.addEventListener('change',function(){
-        rec(id).rating=this.value; touch(id); save();
-        this.dataset.v=this.value;
-        const col=this.value?RATING_COLOR[this.value]:"#3A3F48";
-        wrap.querySelector('.rate-emoji').textContent=this.value?RATING_EMOJI[this.value]:'';
-        wrap.style.borderLeftColor=col;
-      });
-      wrap.querySelectorAll('.bat select').forEach(sel=>{
-        sel.addEventListener('change',function(){
-          rec(id).inv[this.dataset.bk]=this.value; touch(id); save();
-          this.dataset.v=this.value;
-        });
-      });
-      sec.appendChild(wrap);
-    });
-    app.appendChild(sec);
+    b.rows.forEach(r=>{ if(!q||(r[0]+" "+r[1]+" "+r[2]).toLowerCase().includes(q)) items.push([b.key,r]); });
   });
+  const shown=items.length;
+  if(sortByDistance){
+    items.sort((x,y)=> distVal(x[1][2]) - distVal(y[1][2]));
+    const sec=document.createElement('section');
+    sec.className="banner";
+    sec.innerHTML='<div class="banner-head"><span class="banner-tag" style="background:var(--mm)">📍 Nearest first</span><span class="n">'+shown+' stores</span></div>';
+    items.forEach(it=> sec.appendChild(buildStore(it[0], it[1])));
+    app.appendChild(sec);
+  } else {
+    banners.forEach(b=>{
+      if(filter!=="all"&&filter!==b.key) return;
+      const matches=b.rows.filter(r=>!q||(r[0]+" "+r[1]+" "+r[2]).toLowerCase().includes(q));
+      if(!matches.length) return;
+      const sec=document.createElement('section');
+      sec.className="banner "+b.key;
+      sec.innerHTML='<div class="banner-head"><span class="banner-tag">'+b.tag+'</span><h2>Wisconsin</h2><span class="n">'+matches.length+' of '+b.rows.length+'</span></div>';
+      let lastCity=null;
+      matches.forEach(r=>{ if(r[1]!==lastCity){const h=document.createElement('div');h.className="city";h.textContent=r[1];sec.appendChild(h);lastCity=r[1];} sec.appendChild(buildStore(b.key,r)); });
+      app.appendChild(sec);
+    });
+  }
   emptyEl.classList.toggle('show',shown===0);
   countEl.textContent=shown+(shown===1?" store":" stores");
 }
