@@ -73,6 +73,7 @@
   .sub a:hover{text-decoration:underline}
   .rowmeta{display:flex;align-items:center;gap:8px;flex:none}
   .when{font-size:12px;color:var(--muted);white-space:nowrap}
+  .noteflag{font-size:13px;line-height:1;flex:none}
   .rate-emoji{font-size:16px;line-height:1;flex:none;min-width:18px;text-align:center}
   .toggle{flex:none;font-family:'Archivo Narrow',sans-serif;font-weight:700;font-size:12px;letter-spacing:.04em;text-transform:uppercase;border:1px solid var(--line);border-radius:8px;padding:8px 11px;color:#C7CBD1;background:var(--card);cursor:pointer;white-space:nowrap;transition:.15s}
   .toggle:hover{border-color:#3A3F48}
@@ -99,6 +100,8 @@
   .bat select[data-v="medium"]{border-color:var(--r-okay);color:var(--r-okay);font-weight:600}
   .bat select[data-v="high"]{border-color:var(--r-green);color:var(--r-green);font-weight:600}
   .bat select[data-v="restock"]{border-color:var(--r-red);color:var(--r-red);font-weight:600}
+  .note-area{width:100%;min-height:62px;resize:vertical;font-family:inherit;font-size:13.5px;line-height:1.4;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:9px 11px;outline:0}
+  .note-area:focus{border-color:#4A4F59}
   .empty{display:none;text-align:center;padding:48px 0;color:var(--muted)}
   .empty.show{display:block}
   footer{border-top:1px solid var(--line);margin-top:40px;padding:24px 0 60px;font-size:13px;color:var(--muted)}
@@ -111,7 +114,7 @@
   <div class="wrap">
     <p class="eyebrow">Wisconsin Store Directory</p>
     <h1><span class="red">Pick 'n Save</span> &amp; <span class="green">Metro Market</span></h1>
-    <p class="lede">Every location in the state — tap any address to open it in Google Maps, and hit <b>Check</b> on any store to log your visit date, rate it, and track battery inventory.</p>
+    <p class="lede">Every location in the state — tap any address to open it in Google Maps, and hit <b>Check</b> on any store to log your visit date, rate it, track battery inventory, and jot notes.</p>
     <p class="meta">100 stores total &middot; 77 Pick 'n Save + 23 Metro Market &middot; Data current as of June 10, 2026</p>
   </div>
 </header>
@@ -142,7 +145,7 @@
 <div class="empty wrap" id="empty">No stores match that search. Try a city name or ZIP.</div>
 <footer>
   <div class="wrap">
-    Addresses link to <b>Google Maps</b>. Distances are driving miles + approx. time from your location (or Port Washington), measured ZIP-to-ZIP. Your check dates, ratings, and inventory notes sync automatically across your devices via the cloud — use <b>Export</b> for a backup. Pick 'n Save and Metro Market are operated by <b>Roundy's Supermarkets</b>, a Kroger company.
+    Addresses link to <b>Google Maps</b>. Distances are driving miles + approx. time from your location (or Port Washington), measured ZIP-to-ZIP. Your check dates, ratings, inventory, and notes sync automatically across your devices via the cloud — use <b>Export</b> for a backup. Pick 'n Save and Metro Market are operated by <b>Roundy's Supermarkets</b>, a Kroger company.
   </div>
 </footer>
 <script>
@@ -285,7 +288,7 @@ function fmtDate(iso){ if(!iso) return ""; const p=iso.split("-"); return p.leng
 const LS_KEY = "pnsmm-tracker-v1";
 let DATA = {};
 try{ DATA = JSON.parse(localStorage.getItem(LS_KEY) || "{}"); }catch(e){ DATA = {}; }
-function rec(id){ if(!DATA[id]) DATA[id]={date:"",rating:"",inv:{},_ts:0}; if(!DATA[id].inv) DATA[id].inv={}; return DATA[id]; }
+function rec(id){ if(!DATA[id]) DATA[id]={date:"",rating:"",inv:{},note:"",_ts:0}; if(!DATA[id].inv) DATA[id].inv={}; return DATA[id]; }
 function touch(id){ rec(id)._ts = Date.now(); }
 function idOf(key,a,z){ return key+"|"+a+"|"+z; }
 const DATA_URL="https://picknsave-tracker-default-rtdb.firebaseio.com/data.json";
@@ -396,7 +399,6 @@ function useMyLocation(){
 function useHome(){ originCoords=null; sortByDistance=false; driveMap={}; computeDistMap(); render(); setMyLoc(''); setSync("🏠 distances from Port Washington"); ensureDriving(); }
 computeDistMap();
 const banners=[{key:"pns",tag:"Pick 'n Save",rows:PNS},{key:"mm",tag:"Metro Market",rows:MM}];
-const bannerTag={pns:"Pick 'n Save", mm:"Metro Market"};
 const app=document.getElementById('app');
 const countEl=document.getElementById('count');
 const emptyEl=document.getElementById('empty');
@@ -415,6 +417,7 @@ function buildStore(bkey, r){
   const d=rec(id);
   const isOpen=openSet.has(id);
   const dotColor=d.rating?RATING_COLOR[d.rating]:"#3A3F48";
+  const hasNote=!!(d.note&&d.note.trim());
   const wrap=document.createElement('div');
   wrap.className="store-wrap "+bkey;
   wrap.style.borderLeftColor=dotColor;
@@ -430,6 +433,7 @@ function buildStore(bkey, r){
         '<div class="sub">'+esc(c)+', WI '+esc(z)+' &middot; <a href="'+tel(p)+'">'+esc(p)+'</a> &middot; <span class="dist" data-zip="'+esc(z)+'">'+fmtDist(z)+'</span></div>'+
       '</div>'+
       '<div class="rowmeta">'+
+        '<span class="noteflag">'+(hasNote?'📝':'')+'</span>'+
         '<span class="rate-emoji">'+(d.rating?RATING_EMOJI[d.rating]:'')+'</span>'+
         '<span class="when">'+(d.date?esc(fmtDate(d.date)):'')+'</span>'+
         '<button class="toggle">'+(isOpen?'Close':'Check')+'</button>'+
@@ -443,6 +447,8 @@ function buildStore(bkey, r){
       '</div>'+
       '<div class="bat-head">Battery inventory</div>'+
       '<div class="bat-grid">'+batRows+'</div>'+
+      '<div class="bat-head">Notes</div>'+
+      '<textarea class="note-area" placeholder="Notes about this store — hours, layout, what is stocked, contacts…">'+esc(d.note||"")+'</textarea>'+
     '</div>';
   wrap.querySelector('.toggle').addEventListener('click',function(){
     const panel=wrap.querySelector('.panel');
@@ -468,6 +474,11 @@ function buildStore(bkey, r){
       rec(id).inv[this.dataset.bk]=this.value; touch(id); save();
       this.dataset.v=this.value;
     });
+  });
+  const nt=wrap.querySelector('.note-area');
+  nt.addEventListener('input',function(){
+    rec(id).note=this.value; touch(id); save();
+    wrap.querySelector('.noteflag').textContent=this.value.trim()?'📝':'';
   });
   return wrap;
 }
