@@ -1,0 +1,16 @@
+{
+  "name": "Pick 'n Save & Metro Market Tracker",
+  "short_name": "Store Tracker",
+  "description": "Every Wisconsin Pick 'n Save & Metro Market — check-ins, ratings, battery inventory, and notes.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#111317",
+  "theme_color": "#111317",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
