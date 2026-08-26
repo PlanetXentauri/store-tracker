@@ -588,10 +588,20 @@ function productCard(p){
     sendToWFS(p, n); si.value='';
   });
 
-  el.querySelector('[data-del]').addEventListener('click', () => {
-    if(confirm(`Delete “${p.name}”? Its completed shipment history stays in the ledger.`)){
-      state.products = state.products.filter(x => x.id!==p.id); save(); render();
+  // delete — two-tap confirm (native confirm() is blocked in installed PWAs, so don't rely on it)
+  const delBtn = el.querySelector('[data-del]');
+  let delArmed = false, delTimer = null;
+  delBtn.addEventListener('click', () => {
+    if(!delArmed){
+      delArmed = true;
+      delBtn.textContent = 'Tap again to delete';
+      delBtn.style.cssText = 'background:var(--red);color:#fff;border-color:var(--red)';
+      delTimer = setTimeout(() => { delArmed=false; delBtn.textContent='Delete product'; delBtn.style.cssText=''; }, 3000);
+      return;
     }
+    clearTimeout(delTimer);
+    state.products = state.products.filter(x => x.id!==p.id);
+    save(); render(); toast(`Deleted ${p.name}`);
   });
 
   // product photo
@@ -634,12 +644,20 @@ function shipCard(s){
   el.querySelector('[data-recv]').addEventListener('click', () => {
     s.expiresAt = now(); reconcile(); render();
   });
-  el.querySelector('[data-cancel]').addEventListener('click', () => {
-    if(confirm(`Cancel this shipment of ${s.qty}× ${s.name}? The ${s.qty} units return to on-hand; nothing is banked.`)){
-      const p = state.products.find(x => x.id===s.productId);
-      if(p) p.qty = (Number(p.qty)||0) + s.qty;     // give the units back to on-hand
-      state.shipments = state.shipments.filter(x => x.id!==s.id); save(); render();
+  const cancelBtn = el.querySelector('[data-cancel]');
+  let cxArmed = false, cxTimer = null;
+  cancelBtn.addEventListener('click', () => {
+    if(!cxArmed){
+      cxArmed = true; cancelBtn.textContent = 'Tap again to cancel';
+      cancelBtn.style.cssText = 'background:var(--red);color:#fff;border-color:var(--red)';
+      cxTimer = setTimeout(() => { cxArmed=false; cancelBtn.textContent='Cancel (return qty)'; cancelBtn.style.cssText=''; }, 3000);
+      return;
     }
+    clearTimeout(cxTimer);
+    const p = state.products.find(x => x.id===s.productId);
+    if(p) p.qty = (Number(p.qty)||0) + s.qty;     // give the units back to on-hand
+    state.shipments = state.shipments.filter(x => x.id!==s.id); save(); render();
+    toast(`Shipment cancelled — ${s.qty} back on-hand`);
   });
   el.dataset.expires = s.expiresAt; el.dataset.sent = s.sentAt;
   return el;
