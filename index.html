@@ -3,559 +3,1066 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Pick 'n Save & Metro Market — Every Wisconsin Store</title>
+<title>Centauri World — WFS Profit Tracker</title>
 <meta name="theme-color" content="#111317">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Store Tracker">
+<meta name="apple-mobile-web-app-title" content="WFS Tracker">
+<!--
+  DATA SHAPE (for Cowork / Obsidian sync — Import JSON accepts either):
+  A) { "products":[...], "shipments":[...] }   (full state)
+  B) [ { product }, ... ]                       (just products → merged by sku)
+  product fields: name, brand, sku, gtin, itemid, url, type, condition,
+                  price (sale $), margin (% applied to sale price), qty (on-hand units),
+                  estsales, listingscore, status, kmprofit, kmunits, kmrevenue, kmperiod, notes
+  est profit  = price * qty * (margin/100)
+-->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;900&family=Archivo+Narrow:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;900&family=Archivo+Narrow:wght@600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <style>
   :root{
     color-scheme:dark;
-    --ink:#E9E7E2;
-    --paper:#111317;
-    --card:#1A1D23;
-    --muted:#9097A0;
-    --line:#2A2E36;
-    --pns:#F2576A;
-    --pns-soft:#3A1A20;
-    --mm:#4FB07B;
-    --mm-soft:#15301F;
+    --ink:#E9E7E2; --paper:#111317; --card:#1A1D23; --card2:#15181D;
+    --muted:#9097A0; --line:#2A2E36; --line2:#3A3F48;
+    --blue:#3B82F6; --blue-soft:#16243F;
+    --amber:#F0B72E; --amber-soft:#332811;
+    --green:#4FB07B; --green-soft:#15301F;
+    --red:#F2576A; --red-soft:#3A1A20;
+    --violet:#A855F7;
     --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 24px rgba(0,0,0,.35);
-    --r-red:#F2576A; --r-yellow:#F0B72E; --r-green:#4FB07B; --r-okay:#2563EB; --r-excellent:#A855F7;
+    --mono:'JetBrains Mono',ui-monospace,monospace;
   }
   *{box-sizing:border-box}
   html{scroll-behavior:smooth}
-  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Inter',system-ui,sans-serif;-webkit-font-smoothing:antialiased;line-height:1.45;}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:'Inter',system-ui,sans-serif;-webkit-font-smoothing:antialiased;line-height:1.45}
   a{color:inherit}
-  .wrap{max-width:1000px;margin:0 auto;padding:0 18px}
-  header{padding:46px 0 26px;border-bottom:1px solid var(--line)}
-  .eyebrow{font-family:'Archivo Narrow',sans-serif;font-weight:700;letter-spacing:.18em;text-transform:uppercase;font-size:12px;color:var(--muted);margin:0 0 10px}
-  h1{font-family:'Archivo',sans-serif;font-weight:900;letter-spacing:-.02em;font-size:clamp(30px,6vw,52px);line-height:1.02;margin:0 0 14px}
-  h1 .red{color:var(--pns)} h1 .green{color:var(--mm)}
-  .lede{max-width:60ch;color:#C7CBD1;font-size:16px;margin:0}
-  .meta{margin-top:16px;font-size:13px;color:var(--muted)}
-  .controls{position:sticky;top:0;z-index:20;background:rgba(17,19,23,.92);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:14px 0;margin-bottom:8px}
+  .wrap{max-width:1040px;margin:0 auto;padding:0 18px}
+
+  /* header */
+  header{padding:42px 0 22px;border-bottom:1px solid var(--line)}
+  .eyebrow{font-family:'Archivo Narrow',sans-serif;font-weight:700;letter-spacing:.18em;text-transform:uppercase;font-size:12px;color:var(--muted);margin:0 0 10px;display:flex;align-items:center;gap:9px}
+  .eyebrow .dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 0 3px var(--green-soft)}
+  h1{font-family:'Archivo',sans-serif;font-weight:900;letter-spacing:-.02em;font-size:clamp(28px,5.4vw,46px);line-height:1.03;margin:0 0 12px}
+  h1 .accent{color:var(--blue)}
+  .lede{max-width:64ch;color:#C7CBD1;font-size:15.5px;margin:0}
+  .meta{margin-top:14px;font-size:13px;color:var(--muted)}
+
+  /* stat band */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:22px 0 6px}
+  .stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:15px 16px;box-shadow:var(--shadow);border-top:3px solid var(--line)}
+  .stat.onhand{border-top-color:var(--blue)}
+  .stat.avail{border-top-color:var(--violet)}
+  .stat.transit{border-top-color:var(--amber)}
+  .stat.realized{border-top-color:var(--green)}
+  .stat .lbl{font-family:'Archivo Narrow',sans-serif;font-weight:700;text-transform:uppercase;letter-spacing:.06em;font-size:11px;color:var(--muted);margin-bottom:7px}
+  .stat .val{font-family:'Archivo',sans-serif;font-weight:900;font-size:26px;letter-spacing:-.01em;font-variant-numeric:tabular-nums;line-height:1}
+  .stat.avail .val{color:var(--violet)} .stat.transit .val{color:var(--amber)} .stat.realized .val{color:var(--green)} .stat.onhand .val{color:var(--blue)}
+  .stat .sublbl{font-size:12px;color:var(--muted);margin-top:6px}
+
+  /* controls */
+  .controls{position:sticky;top:0;z-index:30;background:rgba(17,19,23,.93);backdrop-filter:blur(8px);border-bottom:1px solid var(--line);padding:13px 0;margin-bottom:6px}
   .controls .wrap{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
   .search{flex:1 1 220px;display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px;box-shadow:var(--shadow)}
   .search svg{flex:none;color:var(--muted)}
   .search input{border:0;outline:0;width:100%;font-size:15px;background:transparent;color:var(--ink);font-family:inherit}
-  .chips{display:flex;gap:6px}
-  .chip{font-family:'Archivo Narrow',sans-serif;font-weight:700;font-size:13px;letter-spacing:.02em;border:1px solid var(--line);background:var(--card);color:#C7CBD1;padding:9px 14px;border-radius:999px;cursor:pointer;transition:.15s;white-space:nowrap}
-  .chip:hover{border-color:#3A3F48}
-  .chip[aria-pressed="true"]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
-  .chip.pns[aria-pressed="true"]{background:var(--pns);border-color:var(--pns)}
-  .chip.mm[aria-pressed="true"]{background:var(--mm);border-color:var(--mm)}
-  .tools{display:flex;gap:6px;margin-left:auto}
-  .tbtn{font-family:'Archivo Narrow',sans-serif;font-weight:700;font-size:12px;letter-spacing:.03em;text-transform:uppercase;border:1px solid var(--line);background:var(--card);color:#C7CBD1;padding:8px 11px;border-radius:8px;cursor:pointer;transition:.15s}
-  .tbtn:hover{border-color:#3A3F48;background:#22262E}
-  .syncstat{font-size:12px;color:var(--muted);white-space:nowrap}
-  .myloc{width:100%;font-size:12.5px;color:var(--mm)}
-  .myloc a{color:var(--mm);text-decoration:underline}
-  .count{width:100%;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
-  .banner{margin:30px 0 8px}
-  .banner-head{display:flex;align-items:baseline;gap:12px;padding-bottom:8px}
-  .banner-tag{font-family:'Archivo',sans-serif;font-weight:900;font-size:13px;letter-spacing:.04em;color:#fff;padding:5px 11px;border-radius:6px}
-  .banner.pns .banner-tag{background:var(--pns)} .banner.mm .banner-tag{background:var(--mm)}
-  .banner-head h2{font-family:'Archivo',sans-serif;font-weight:700;font-size:20px;margin:0}
-  .banner-head .n{color:var(--muted);font-size:14px;font-weight:500}
-  .city{font-family:'Archivo Narrow',sans-serif;font-weight:700;text-transform:uppercase;letter-spacing:.08em;font-size:12px;color:var(--muted);margin:18px 0 8px;padding-bottom:5px;border-bottom:1px solid var(--line)}
-  .store-wrap{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--line);border-radius:12px;margin-bottom:9px;box-shadow:var(--shadow);overflow:hidden;transition:.15s}
-  .store-wrap:hover{border-color:#3A3F48}
-  .store{display:flex;align-items:center;gap:14px;padding:13px 15px}
-  .pin{flex:none;width:34px;height:34px;border-radius:9px;display:grid;place-items:center}
-  .banner.pns .pin,.store-wrap.pns .pin{background:var(--pns-soft);color:var(--pns)}
-  .banner.mm .pin,.store-wrap.mm .pin{background:var(--mm-soft);color:var(--mm)}
-  .info{flex:1;min-width:0}
-  .addr{font-weight:600;font-size:16px;text-decoration:none;color:var(--ink);display:inline-block;border-bottom:2px solid transparent;transition:.15s}
-  .banner.pns .addr:hover,.store-wrap.pns .addr:hover{color:var(--pns);border-color:var(--pns)}
-  .banner.mm .addr:hover,.store-wrap.mm .addr:hover{color:var(--mm);border-color:var(--mm)}
-  .sub{font-size:13px;color:var(--muted);margin-top:2px}
-  .sub a{color:var(--muted);text-decoration:none}
-  .sub a:hover{text-decoration:underline}
-  .rowmeta{display:flex;align-items:center;gap:8px;flex:none}
-  .when{font-size:12px;color:var(--muted);white-space:nowrap}
-  .noteflag{font-size:13px;line-height:1;flex:none}
-  .rate-emoji{font-size:16px;line-height:1;flex:none;min-width:18px;text-align:center}
-  .toggle{flex:none;font-family:'Archivo Narrow',sans-serif;font-weight:700;font-size:12px;letter-spacing:.04em;text-transform:uppercase;border:1px solid var(--line);border-radius:8px;padding:8px 11px;color:#C7CBD1;background:var(--card);cursor:pointer;white-space:nowrap;transition:.15s}
-  .toggle:hover{border-color:#3A3F48}
-  .go{flex:none;font-family:'Archivo Narrow',sans-serif;font-weight:700;font-size:12px;letter-spacing:.04em;text-transform:uppercase;text-decoration:none;border:1px solid var(--line);border-radius:8px;padding:8px 11px;color:#C7CBD1;white-space:nowrap;transition:.15s}
-  .banner.pns .go:hover,.store-wrap.pns .go:hover{background:var(--pns);color:#fff;border-color:var(--pns)}
-  .banner.mm .go:hover,.store-wrap.mm .go:hover{background:var(--mm);color:#fff;border-color:var(--mm)}
-  .panel{display:none;padding:4px 15px 16px;border-top:1px dashed var(--line);background:#15181D}
-  .panel.open{display:block}
-  .panel-top{display:flex;flex-wrap:wrap;gap:14px;margin:14px 0 4px}
+  .tools{display:flex;gap:6px;flex-wrap:wrap}
+  .tbtn{font-family:'Archivo Narrow',sans-serif;font-weight:700;font-size:12px;letter-spacing:.03em;text-transform:uppercase;border:1px solid var(--line);background:var(--card);color:#C7CBD1;padding:9px 12px;border-radius:8px;cursor:pointer;transition:.15s}
+  .tbtn:hover{border-color:var(--line2);background:#22262E}
+  .tbtn.go{border-color:var(--blue);color:#fff;background:var(--blue)}
+  .tbtn.go:hover{filter:brightness(1.08);background:var(--blue)}
+  .timermode{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);font-family:'Archivo Narrow',sans-serif;text-transform:uppercase;letter-spacing:.04em}
+  .timermode select{font-family:inherit;font-size:11.5px;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:7px;padding:6px 7px;outline:0}
+  .syncstat{font-size:12px;color:var(--muted);white-space:nowrap;margin-left:auto;font-variant-numeric:tabular-nums}
+
+  /* section heads */
+  .sec{margin:30px 0 8px}
+  .sec-head{display:flex;align-items:baseline;gap:12px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+  .sec-tag{font-family:'Archivo',sans-serif;font-weight:900;font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:#fff;padding:5px 11px;border-radius:6px}
+  .sec-tag.prod{background:var(--blue)} .sec-tag.live{background:var(--amber);color:#1c1402} .sec-tag.done{background:var(--green)}
+  .sec-head h2{font-family:'Archivo',sans-serif;font-weight:700;font-size:19px;margin:0}
+  .sec-head .n{color:var(--muted);font-size:14px;font-weight:500}
+
+  /* product card */
+  .prod{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--blue);border-radius:13px;margin:10px 0;box-shadow:var(--shadow);overflow:hidden;transition:.15s}
+  .prod.zero{border-left-color:var(--red)}
+  .prod:hover{border-color:var(--line2)}
+  .prod-head{display:flex;align-items:center;gap:13px;padding:14px 15px;cursor:pointer}
+  .ico{flex:none;width:56px;height:56px;border-radius:11px;display:grid;place-items:center;background:var(--blue-soft);color:var(--blue);font-size:26px;cursor:pointer;overflow:hidden}
+  .ico.haspic{background:#fff}
+  .ico.haspic img{width:100%;height:100%;object-fit:contain;display:block}
+  .prod.zero .ico{background:var(--red-soft);color:var(--red)}
+  .prod.zero .ico.haspic{background:#fff}
+  .prodpic{margin:12px 0 2px}
+  .prodpic img{max-width:200px;max-height:200px;width:auto;height:auto;border-radius:10px;border:1px solid var(--line);background:#fff;display:block;padding:4px}
+  .pinfo{flex:1;min-width:0}
+  .pname{font-weight:600;font-size:16px;letter-spacing:-.01em}
+  .psub{font-size:12.5px;color:var(--muted);margin-top:2px;display:flex;gap:8px;flex-wrap:wrap}
+  .psub .sku{font-weight:700;color:#FFC93C}
+  .estsales-v{font-style:italic;color:var(--violet)}
+  .psales{margin-top:5px;display:inline-block;font-size:12px;font-weight:600;color:#9CC4FF;background:var(--blue-soft);border:1px solid #2A4569;padding:2px 9px;border-radius:6px}
+  .psales b{color:#CFE2FF;font-weight:700}
+  .badge{font-family:'Archivo Narrow',sans-serif;font-weight:700;text-transform:uppercase;letter-spacing:.04em;font-size:10.5px;padding:2px 7px;border-radius:5px;background:var(--green-soft);color:var(--green)}
+  .pprofit{flex:none;text-align:right}
+  .pprofit .v{font-family:'Archivo',sans-serif;font-weight:900;font-size:21px;color:var(--green);font-variant-numeric:tabular-nums;line-height:1}
+  .pprofit .l{font-family:'Archivo Narrow',sans-serif;font-weight:700;text-transform:uppercase;letter-spacing:.05em;font-size:10px;color:var(--muted);margin-top:3px}
+  .chev{flex:none;color:var(--muted);transition:.2s;font-size:13px}
+  .prod.open .chev{transform:rotate(90deg)}
+
+  /* live recalc control strip */
+  .strip{display:flex;flex-wrap:wrap;align-items:flex-end;gap:12px;padding:0 15px 15px;border-top:1px dashed var(--line);margin-top:2px;padding-top:13px}
   .fld{display:flex;flex-direction:column;gap:5px}
-  .fld label{font-family:'Archivo Narrow',sans-serif;font-weight:700;text-transform:uppercase;letter-spacing:.05em;font-size:11px;color:var(--muted)}
-  .fld input,.fld select{font-family:inherit;font-size:14px;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 10px;outline:0;min-width:170px}
-  .fld input:focus,.fld select:focus{border-color:#4A4F59}
-  select.rate[data-v="red"]{border-color:var(--r-red);color:var(--r-red);font-weight:600}
-  select.rate[data-v="yellow"]{border-color:var(--r-yellow);color:var(--r-yellow);font-weight:600}
-  select.rate[data-v="green"]{border-color:var(--r-green);color:var(--r-green);font-weight:600}
-  select.rate[data-v="excellent"]{border-color:var(--r-excellent);color:var(--r-excellent);font-weight:600}
-  .bat-head{font-family:'Archivo Narrow',sans-serif;font-weight:700;text-transform:uppercase;letter-spacing:.06em;font-size:11px;color:var(--muted);margin:16px 0 8px}
-  .bat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(248px,1fr));gap:8px 14px}
-  .bat{display:flex;align-items:center;gap:10px}
-  .bat .bn{flex:1;font-size:13.5px;font-weight:500;min-width:0}
-  .bat select{flex:none;width:160px;font-family:inherit;font-size:13px;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:7px 8px;outline:0}
-  .bat select[data-v="low"]{border-color:var(--r-yellow);color:#E6A92E;font-weight:600}
-  .bat select[data-v="medium"]{border-color:var(--r-okay);color:var(--r-okay);font-weight:600}
-  .bat select[data-v="high"]{border-color:var(--r-green);color:var(--r-green);font-weight:600}
-  .bat select[data-v="restock"]{border-color:var(--r-red);color:var(--r-red);font-weight:600}
-  .note-area{width:100%;min-height:62px;resize:vertical;font-family:inherit;font-size:13.5px;line-height:1.4;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:9px 11px;outline:0}
-  .note-area:focus{border-color:#4A4F59}
-  .empty{display:none;text-align:center;padding:48px 0;color:var(--muted)}
-  .empty.show{display:block}
-  footer{border-top:1px solid var(--line);margin-top:40px;padding:24px 0 60px;font-size:13px;color:var(--muted)}
+  .fld label{font-family:'Archivo Narrow',sans-serif;font-weight:700;text-transform:uppercase;letter-spacing:.05em;font-size:10.5px;color:var(--muted)}
+  .fld input{font-family:var(--mono);font-size:14px;color:var(--ink);background:var(--card2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;outline:0;width:96px}
+  .fld input:focus{border-color:var(--blue)}
+  .fld input[readonly]{opacity:.62;cursor:not-allowed;border-style:dashed}
+  .badge.obs{background:var(--blue-soft);color:var(--blue)}
+  .fld.calc{margin-left:0}
+  .fld .calcval{font-family:var(--mono);font-weight:700;font-size:15px;color:var(--green);background:var(--card2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-width:104px;text-align:right}
+  .eq{align-self:center;color:var(--muted);font-size:18px;padding:0 2px;margin-top:14px}
+  .send{margin-left:auto;display:flex;align-items:flex-end;gap:8px;background:var(--amber-soft);border:1px solid #4a3a12;border-radius:10px;padding:9px 11px}
+  .send .fld input{width:72px;border-color:#5a4716}
+  .send .avail{font-size:11px;color:var(--amber);font-family:'Archivo Narrow',sans-serif;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px}
+  .sendbtn{font-family:'Archivo',sans-serif;font-weight:700;font-size:12.5px;letter-spacing:.03em;text-transform:uppercase;border:0;background:var(--amber);color:#1c1402;padding:9px 14px;border-radius:8px;cursor:pointer;transition:.15s;white-space:nowrap}
+  .sendbtn:hover{filter:brightness(1.08)}
+  .sendbtn:disabled{opacity:.4;cursor:not-allowed}
+
+  /* expand panel */
+  .panel{display:none;padding:2px 15px 16px;background:var(--card2);border-top:1px dashed var(--line)}
+  .prod.open .panel{display:block}
+  .grid2{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px 18px;margin:14px 0 6px}
+  .kv{font-size:13px}
+  .kv .k{font-family:'Archivo Narrow',sans-serif;font-weight:700;text-transform:uppercase;letter-spacing:.05em;font-size:10.5px;color:var(--muted);display:block;margin-bottom:2px}
+  .kv .vv{color:var(--ink);font-variant-numeric:tabular-nums}
+  .kv a{color:var(--blue);text-decoration:none}.kv a:hover{text-decoration:underline}
+  .note-area{width:100%;min-height:54px;resize:vertical;font-family:inherit;font-size:13px;line-height:1.4;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:9px 11px;outline:0;margin-top:4px}
+  .note-area:focus{border-color:var(--line2)}
+  .panel-act{display:flex;gap:8px;margin-top:12px}
+  .smallbtn{font-family:'Archivo Narrow',sans-serif;font-weight:700;font-size:11px;letter-spacing:.04em;text-transform:uppercase;border:1px solid var(--line);background:var(--card);color:var(--muted);padding:7px 10px;border-radius:7px;cursor:pointer;transition:.15s}
+  .smallbtn:hover{border-color:var(--red);color:var(--red)}
+
+  /* live shipment card */
+  .ship{background:var(--card);border:1px solid var(--line);border-left:4px solid var(--amber);border-radius:13px;margin:10px 0;box-shadow:var(--shadow);padding:14px 15px}
+  .ship.urgent{border-left-color:var(--red)}
+  .ship-top{display:flex;align-items:center;gap:13px;flex-wrap:wrap}
+  .ship-name{font-weight:600;font-size:15px;flex:1;min-width:0}
+  .ship-name .q{color:var(--amber);font-weight:700}
+  .countdown{font-family:var(--mono);font-weight:700;font-size:18px;color:var(--amber);font-variant-numeric:tabular-nums;letter-spacing:.02em;white-space:nowrap}
+  .ship.urgent .countdown{color:var(--red)}
+  .ship-sub{font-size:12.5px;color:var(--muted);margin-top:8px;display:flex;gap:14px;flex-wrap:wrap;font-variant-numeric:tabular-nums}
+  .ship-sub b{color:#C7CBD1;font-weight:600}
+  .bar{height:5px;border-radius:3px;background:var(--line);margin-top:11px;overflow:hidden}
+  .bar > i{display:block;height:100%;background:var(--amber);border-radius:3px;transition:width 1s linear}
+  .ship.urgent .bar > i{background:var(--red)}
+  .ship-act{display:flex;gap:7px;margin-top:11px;flex-wrap:wrap}
+  .ship-act button{font-family:'Archivo Narrow',sans-serif;font-weight:700;font-size:11px;letter-spacing:.04em;text-transform:uppercase;border:1px solid var(--line);background:var(--card2);color:#C7CBD1;padding:7px 11px;border-radius:7px;cursor:pointer;transition:.15s}
+  .ship-act .recv:hover{border-color:var(--green);color:var(--green)}
+  .ship-act .cancel:hover{border-color:var(--red);color:var(--red)}
+
+  /* completed table */
+  .done-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:6px}
+  .done-table th{font-family:'Archivo Narrow',sans-serif;font-weight:700;text-transform:uppercase;letter-spacing:.05em;font-size:10.5px;color:var(--muted);text-align:left;padding:9px 10px;border-bottom:1px solid var(--line)}
+  .done-table td{padding:11px 10px;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums;vertical-align:top}
+  .done-table tr:hover td{background:var(--card2)}
+  .done-table .prof{color:var(--green);font-weight:600;text-align:right;font-family:var(--mono)}
+  .done-table th.r,.done-table td.r{text-align:right}
+  .done-total{font-family:'Archivo',sans-serif;font-weight:900;color:var(--green)}
+
+  .empty{text-align:center;padding:30px 0;color:var(--muted);font-size:14px}
+
+  /* add-product form */
+  .addform{display:none;background:var(--card);border:1px solid var(--blue);border-radius:13px;padding:16px;margin:10px 0;box-shadow:var(--shadow)}
+  .addform.open{display:block}
+  .addform .row{display:flex;flex-wrap:wrap;gap:12px}
+  .addform .fld input{width:auto;min-width:150px;flex:1}
+  .addform .act{margin-top:13px;display:flex;gap:8px}
+
+  /* toast */
+  #toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);background:var(--green);color:#072013;font-family:'Archivo',sans-serif;font-weight:700;font-size:13.5px;padding:12px 18px;border-radius:10px;box-shadow:0 8px 30px rgba(0,0,0,.5);opacity:0;pointer-events:none;transition:.3s;z-index:80;max-width:90vw;text-align:center}
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+  footer{border-top:1px solid var(--line);margin-top:42px;padding:22px 0 60px;font-size:13px;color:var(--muted)}
   footer b{color:#C7CBD1;font-weight:600}
-  @media (max-width:560px){.go{display:none}.store{padding:12px;flex-wrap:wrap}.bat select{width:140px}}
+
+  @media (max-width:680px){
+    .stats{grid-template-columns:repeat(2,1fr)}
+    .send{margin-left:0;width:100%}
+    .pprofit .v{font-size:18px}
+  }
 </style>
 </head>
 <body>
+
 <header>
   <div class="wrap">
-    <p class="eyebrow">Wisconsin Store Directory</p>
-    <h1><span class="red">Pick 'n Save</span> &amp; <span class="green">Metro Market</span></h1>
-    <p class="lede">Every location in the state — tap any address to open it in Google Maps, and hit <b>Check</b> on any store to log your visit date, rate it, track battery inventory, and jot notes.</p>
-    <p class="meta">100 stores total &middot; 77 Pick 'n Save + 23 Metro Market &middot; Data current as of June 10, 2026</p>
+    <p class="eyebrow"><span class="dot"></span> Centauri World · Walmart WFS</p>
+    <h1>WFS <span class="accent">Profit Tracker</span></h1>
+    <p class="lede">Live profit on every published SKU, and a 7-day shipment clock. Send units to WFS, the timer runs, and at zero the qty drops off inventory while its profit banks into Realized — so you always know exactly what shipped and when.</p>
+    <p class="meta" id="meta"></p>
   </div>
 </header>
+
+<div class="wrap">
+  <div class="stats">
+    <div class="stat onhand"><div class="lbl">On-hand units</div><div class="val" id="s-units">0</div><div class="sublbl" id="s-skus">0 published SKUs</div></div>
+    <div class="stat avail"><div class="lbl">Available est. profit</div><div class="val" id="s-avail">$0</div><div class="sublbl">price × qty × margin</div></div>
+    <div class="stat transit"><div class="lbl">In transit to WFS</div><div class="val" id="s-transit">$0</div><div class="sublbl" id="s-transit-n">0 live shipments</div></div>
+    <div class="stat realized"><div class="lbl">Realized profit</div><div class="val" id="s-realized">$0</div><div class="sublbl" id="s-realized-n">0 completed</div></div>
+  </div>
+</div>
+
 <div class="controls">
   <div class="wrap">
     <label class="search">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"></circle><path d="m21 21-4.3-4.3"></path></svg>
-      <input id="q" type="search" placeholder="Search city, street, or ZIP…" autocomplete="off">
+      <input id="q" type="search" placeholder="Search product, SKU, brand…" autocomplete="off">
     </label>
-    <div class="chips" role="group" aria-label="Filter by banner">
-      <button class="chip" data-f="all" aria-pressed="true">All</button>
-      <button class="chip pns" data-f="pns" aria-pressed="false">Pick 'n Save</button>
-      <button class="chip mm" data-f="mm" aria-pressed="false">Metro Market</button>
-    </div>
     <div class="tools">
-      <button class="tbtn" id="locBtn" title="Sort stores nearest-first from your current location">📍 My location</button>
-      <button class="tbtn" id="homeBtn" title="Back to the normal list, distances from Port Washington">🏠 Home</button>
-      <button class="tbtn" id="exportBtn" title="Download your data as a backup file">Export</button>
-      <button class="tbtn" id="importBtn" title="Load data from a backup file">Import</button>
-      <input type="file" id="importFile" accept="application/json" style="display:none">
+      <button class="tbtn go" id="addbtn">+ Product</button>
+      <button class="tbtn" id="fsbtn" title="Connect your Obsidian publish folder for auto-sync">◇ Connect folder</button>
+      <span class="syncbtns" id="syncbtns" style="display:none;gap:6px">
+        <button class="tbtn" id="syncnew" title="Add only products that aren't in the tracker yet">Sync new ↓</button>
+        <button class="tbtn" id="syncall" title="Refresh every product's details from your notes">Sync all ↓↓</button>
+      </span>
+      <button class="tbtn" id="importbtn">Import</button>
+      <button class="tbtn" id="exportbtn">Export</button>
+      <button class="tbtn" id="cloudbtn" title="Two-way sync across devices (phone + desktop) via Firebase">☁ Cloud</button>
     </div>
-    <span class="syncstat" id="syncStatus"></span>
-    <span class="myloc" id="myLoc" style="display:none"></span>
-    <span class="count" id="count"></span>
+    <span class="timermode">Timer
+      <select id="timermode" title="Shipment window length">
+        <option value="7d" selected>7 days</option>
+        <option value="1m">1 min (test)</option>
+      </select>
+    </span>
+    <span class="syncstat" id="sync">—</span>
+    <input type="file" id="importfile" accept="application/json" hidden>
   </div>
 </div>
-<main class="wrap" id="app"></main>
-<div class="empty wrap" id="empty">No stores match that search. Try a city name or ZIP.</div>
+
+<main class="wrap" id="app">
+
+  <div class="addform" id="addform">
+    <div class="row">
+      <div class="fld"><label>Product name</label><input id="a-name" placeholder="Energizer Ultimate Lithium AA 8pk"></div>
+      <div class="fld"><label>Brand</label><input id="a-brand" placeholder="Energizer"></div>
+      <div class="fld"><label>SKU</label><input id="a-sku" placeholder="AA08"></div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <div class="fld"><label>Sale price $</label><input id="a-price" type="number" step="0.01" placeholder="16.99"></div>
+      <div class="fld"><label>Margin %</label><input id="a-margin" type="number" step="0.1" placeholder="60"></div>
+      <div class="fld"><label>Qty on hand</label><input id="a-qty" type="number" step="1" placeholder="10"></div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <div class="fld"><label>GTIN</label><input id="a-gtin" placeholder="00039800062826"></div>
+      <div class="fld"><label>Item ID</label><input id="a-itemid" placeholder="4291458"></div>
+      <div class="fld"><label>Type</label><input id="a-type" placeholder="Battery"></div>
+      <div class="fld"><label>Condition</label><input id="a-condition" value="New"></div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <div class="fld"><label>Est. monthly sales</label><input id="a-estsales" type="number" step="1" placeholder="355"></div>
+      <div class="fld"><label>Listing score</label><input id="a-listingscore" placeholder="78"></div>
+      <div class="fld"><label>Status</label><input id="a-status" value="Published"></div>
+      <div class="fld"><label>Walmart URL</label><input id="a-url" placeholder="https://walmart.com/ip/…"></div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <div class="fld"><label>KwickMetrics profit $</label><input id="a-kmprofit" placeholder="211.60"></div>
+      <div class="fld"><label>KM units</label><input id="a-kmunits" placeholder="18"></div>
+      <div class="fld"><label>KM revenue $</label><input id="a-kmrevenue" placeholder="319.86"></div>
+      <div class="fld"><label>KM period</label><input id="a-kmperiod" placeholder="6M (Dec 2025 – May 2026)"></div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <div class="fld" style="flex:1 1 100%;min-width:100%"><label>Notes</label><textarea id="a-notes" class="note-area" placeholder="Notes…"></textarea></div>
+    </div>
+    <div class="row" style="margin-top:12px;align-items:center">
+      <div class="fld"><label>Photo (optional)</label><button class="tbtn" id="a-photo-btn" type="button">Choose photo…</button></div>
+      <input type="file" id="a-photo" accept="image/*" hidden>
+      <span id="a-photo-name" style="font-size:12px;color:var(--muted)"></span>
+    </div>
+    <div class="act">
+      <button class="tbtn go" id="a-save">Add product</button>
+      <button class="tbtn" id="a-cancel">Cancel</button>
+    </div>
+  </div>
+
+  <div class="addform" id="cloudform">
+    <div style="font-family:'Archivo',sans-serif;font-weight:900;font-size:15px;margin-bottom:4px">☁ Cloud sync — phone &amp; desktop</div>
+    <p style="color:var(--muted);font-size:12.5px;margin:0 0 12px;max-width:70ch">Paste your Firebase config below and pick a <b>Sync code</b>. Enter the <b>same config and same code</b> on every device (phone included) and they stay in sync live. The sync code is a shared secret — keep it private.</p>
+    <div class="fld" style="margin-bottom:10px"><label>Firebase config</label>
+      <textarea id="c-config" class="note-area" style="min-height:130px;font-family:var(--mono);font-size:12px" placeholder="Paste the whole firebaseConfig object from your Firebase project settings, e.g. { apiKey: &quot;…&quot;, projectId: &quot;…&quot;, … }"></textarea>
+    </div>
+    <div class="row">
+      <div class="fld" style="flex:1;min-width:200px"><label>Sync code (shared secret)</label><input id="c-code" placeholder="leave blank to auto-generate"></div>
+    </div>
+    <div class="act">
+      <button class="tbtn go" id="c-connect">Connect</button>
+      <button class="tbtn" id="c-copy">Copy code</button>
+      <button class="tbtn" id="c-disconnect">Disconnect</button>
+      <button class="tbtn" id="c-cancel">Close</button>
+    </div>
+    <div id="c-status" style="margin-top:10px;font-size:12.5px;color:var(--muted)"></div>
+  </div>
+
+  <section class="sec" id="sec-prod">
+    <div class="sec-head"><span class="sec-tag prod">Published</span><h2>Products</h2><span class="n" id="prod-n"></span></div>
+    <div id="prod-list"></div>
+  </section>
+
+  <section class="sec" id="sec-live">
+    <div class="sec-head"><span class="sec-tag live">Live</span><h2>Sent to WFS</h2><span class="n" id="live-n"></span></div>
+    <div id="live-list"></div>
+  </section>
+
+  <section class="sec" id="sec-done">
+    <div class="sec-head"><span class="sec-tag done">Completed</span><h2>Shipment Ledger</h2><span class="n" id="done-n"></span></div>
+    <div id="done-list"></div>
+  </section>
+
+</main>
+
 <footer>
   <div class="wrap">
-    Addresses link to <b>Google Maps</b>. Distances are driving miles + approx. time from your location (or Port Washington), measured ZIP-to-ZIP. Your check dates, ratings, inventory, and notes sync automatically across your devices via the cloud — use <b>Export</b> for a backup. Pick 'n Save and Metro Market are operated by <b>Roundy's Supermarkets</b>, a Kroger company.
+    Profit = <b>sale price × qty × margin %</b>. Sending units to WFS removes them from <b>on-hand</b> immediately (they're now in transit); when the 7-day timer hits zero their profit banks into <b>Realized</b>. Cancel a shipment to return its units to on-hand. Timers reconcile when the page opens and tick live while open. <b>◇ Connect folder</b> (Chrome / Edge / Brave) to auto-save every change into <b>centauri-wfs-data.json</b> inside your Obsidian publish folder, then pull product notes with <b>Sync new</b> (adds missing SKUs) or <b>Sync all</b> (refreshes every product). <b>Export</b> still works anywhere for manual backups.
   </div>
 </footer>
+
+<div id="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script>
-const PIN = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>';
-const BATTERIES = [
-  {k:"max-aaa-24",     n:"Energizer MAX AAA 24pk"},
-  {k:"ult-aa-8",       n:"Ultimate Lithium AA 8pk ($16.99)"},
-  {k:"ult-aa-8-alt",   n:"Ultimate Lithium AA 8pk ($23.98)"},
-  {k:"rechg-aa-8",     n:"Rechargeable AA 8pk"},
-  {k:"ult-aaa-8",      n:"Ultimate Lithium AAA 8pk"},
-  {k:"123-6",          n:"123 Lithium 6pk"},
-  {k:"123-4",          n:"123 Lithium 4pk"},
-  {k:"9v-1",           n:"Lithium 9V 1pk"}
-];
-const RATINGS = [
-  {v:"",          t:"— rate —"},
-  {v:"red",       t:"🚫"},
-  {v:"yellow",    t:"⚠️"},
-  {v:"green",     t:"✅"},
-  {v:"excellent", t:"🔥🔥🔥"}
-];
-const RATING_COLOR = {red:"#F2576A",yellow:"#F0B72E",green:"#4FB07B",okay:"#2563EB",excellent:"#A855F7"};
-const INV = [
-  {v:"",        t:"—"},
-  {v:"low",     t:"🪫"},
-  {v:"medium",  t:"⚠️"},
-  {v:"high",    t:"🔋"},
-  {v:"restock", t:"🛒"}
-];
-const RATING_EMOJI = Object.fromEntries(RATINGS.map(r=>[r.v,r.t]));
-const INV_EMOJI = Object.fromEntries(INV.map(r=>[r.v,r.t]));
-const PNS = [
- ["406 Prosser Pl","Antigo","54409","(715) 623-7621"],
- ["N135 Stoney Brook Rd","Appleton","54915","(920) 997-0232"],
- ["2700 N Ballard Rd","Appleton","54911","(920) 993-0148"],
- ["511 W Calumet St","Appleton","54915","(920) 734-0636"],
- ["2400 W Wisconsin Ave","Appleton","54914","(920) 831-0333"],
- ["2064 Lime Kiln Rd","Bellevue","54311","(920) 469-8293"],
- ["17295 W Capitol Dr","Brookfield","53045","(262) 783-2080"],
- ["15170 W Greenfield Ave","Brookfield","53005","(262) 782-2745"],
- ["9200 N Green Bay Rd","Brown Deer","53209","(414) 354-6653"],
- ["1008 Milwaukee Ave","Burlington","53105","(262) 763-3695"],
- ["210 Dix St","Columbus","53925","(920) 623-2205"],
- ["621 S Main St","Deforest","53532","(608) 846-8922"],
- ["711 US Highway 45 N","Eagle River","54521","(715) 479-4416"],
- ["3010 Cahill Main","Fitchburg","53711","(608) 271-2024"],
- ["55 W Pioneer Rd","Fond Du Lac","54935","(920) 921-9898"],
- ["760 W Johnson St","Fond Du Lac","54935","(920) 929-6510"],
- ["1505 Madison Ave","Fort Atkinson","53538","(920) 568-2603"],
- ["7201 S 76th St","Franklin","53132","(414) 427-8100"],
- ["7780 S Lovers Lane Rd","Franklin","53132","(414) 425-5400"],
- ["N112W16200 Mequon Rd","Germantown","53022","(262) 253-0841"],
- ["301 Falls Rd","Grafton","53024","(262) 243-5900"],
- ["1819 Main St","Green Bay","54302","(920) 468-0447"],
- ["5800 S 108th St","Hales Corners","53130","(414) 427-8812"],
- ["2811 18th St","Kenosha","53140","(262) 597-0110"],
- ["5710 75th St","Kenosha","53142","(262) 697-4982"],
- ["1312 Park St.","Madison","53715","(608) 257-3748"],
- ["2502 Shopko Dr","Madison","53704","(608) 243-1000"],
- ["3197 Maple Grove Dr","Madison","53719","(608) 410-7050"],
- ["3300 Calumet Ave","Manitowoc","54220","(920) 682-6827"],
- ["641 S Central Ave","Marshfield","54449","(715) 384-8716"],
- ["5709 US Highway 51","Mcfarland","53558","(608) 838-3604"],
- ["N77W14435 Appleton Ave","Menomonee Falls","53051","(262) 255-7598"],
- ["605 E Lyon St","Milwaukee","53202","(414) 272-6677"],
- ["250 W Holt Ave","Milwaukee","53207","(414) 294-2144"],
- ["1100 E Garfield Ave","Milwaukee","53212","(414) 374-8621"],
- ["7401 W Good Hope Rd","Milwaukee","53223","(414) 358-0011"],
- ["5700 W Capitol Dr","Milwaukee","53216","(414) 873-3085"],
- ["8151 W Bluemound Rd","Milwaukee","53213","(414) 771-9039"],
- ["246 8th St","Monroe","53566","(608) 564-6950"],
- ["2820 S Green Bay Rd","Mount Pleasant","53406","(262) 554-9630"],
- ["1202 N Green Bay Rd","Mount Pleasant","53406","(262) 884-8749"],
- ["S74 W17005 Janesville Rd","Muskego","53150","(262) 679-1931"],
- ["3161 Village Square Dr","Nashotah","53029","(262) 369-1416"],
- ["1530 S Commercial St","Neenah","54956","(920) 751-8842"],
- ["828 Fox Point Plz","Neenah","54956","(920) 722-9427"],
- ["15445 W National Ave","New Berlin","53151","(262) 789-1000"],
- ["6462 S 27th St","Oak Creek","53154","(414) 761-1240"],
- ["8770 S Howell Ave","Oak Creek","53154","(414) 571-9910"],
- ["1940 S Koeller St","Oshkosh","54901","(920) 303-3300"],
- ["1900 Jackson St","Oshkosh","54901","(920) 424-7820"],
- ["1405 Capitol Dr","Pewaukee","53072","(262) 695-1156"],
- ["256 S Lake Ave","Phillips","54555","(715) 260-7001"],
- ["2643 Eastern Ave","Plymouth","53073","(920) 892-6648"],
- ["5111 Douglas Ave","Racine","53402","(262) 752-0951"],
- ["10101 Market St","Rothschild","54474","(715) 241-0191"],
- ["4698 S Whitnall Ave","Saint Francis","53235","(414) 769-8801"],
- ["2806 Schofield Ave","Schofield","54476","(715) 359-9123"],
- ["1317 N 25th St","Sheboygan","53081","(920) 459-2802"],
- ["1750 US Highway 51","Stoughton","53589","(608) 873-0171"],
- ["1847 Egg Harbor Rd","Sturgeon Bay","54235","(920) 743-8830"],
- ["640 E Main St","Sun Prairie","53590","(608) 837-7555"],
- ["1010 22nd St","Two Rivers","54241","(920) 793-2266"],
- ["405 N Wales Rd","Wales","53183","(262) 968-9460"],
- ["515 N Milwaukee St","Waterford","53185","(262) 804-6060"],
- ["624 S Church St","Watertown","53094","(920) 261-8281"],
- ["1220 W Sunset Dr","Waukesha","53189","(262) 446-6980"],
- ["220 E Sunset Dr","Waukesha","53189","(262) 547-7801"],
- ["955 W Fulton St","Waupaca","54981","(715) 258-7624"],
- ["205 Central Bridge St","Wausau","54401","(715) 849-1323"],
- ["N2573 Plaza Rd","Wautoma","54982","(920) 787-2027"],
- ["1717 N Mayfair Rd","Wauwatosa","53226","(414) 778-1839"],
- ["2625 S 108th St","West Allis","53227","(414) 541-1333"],
- ["6760 W National Ave","West Allis","53214","(414) 476-6061"],
- ["1629 S Main St","West Bend","53095","(262) 338-5626"],
- ["2518 W Washington St","West Bend","53095","(262) 338-5632"],
- ["2201 Miller Park Way","West Milwaukee","53219","(414) 383-9755"],
- ["900 E Riverview Expy","Wisconsin Rapids","54494","(715) 631-7180"]
-];
-const MM = [
- ["17630 W Bluemound Rd","Brookfield","53045","(262) 784-2410"],
- ["12735 W Capitol Dr","Brookfield","53005","(262) 783-7502"],
- ["6969 N Port Washington Rd","Glendale","53217","(414) 351-0298"],
- ["1291 Lombardi Access Rd","Green Bay","54304","(920) 498-9734"],
- ["4279 S 76th St","Greenfield","53220","(414) 541-0061"],
- ["261 Junction Rd","Madison","53717","(608) 829-2020"],
- ["6010 Cottage Grove Rd","Madison","53718","(608) 223-0939"],
- ["N95W18351 County Line Rd","Menomonee Falls","53051","(262) 255-4331"],
- ["11558 N Port Washington Rd","Mequon","53092","(262) 241-6721"],
- ["6800 Century Ave","Middleton","53562","(608) 831-3009"],
- ["1123 N Van Buren St","Milwaukee","53202","(414) 273-1928"],
- ["6540 Monona Dr","Monona","53716","(608) 222-9575"],
- ["1010 N Rochester St","Mukwonago","53149","(262) 363-3026"],
- ["1300 Pabst Farms Cir","Oconomowoc","53066","(262) 200-7425"],
- ["N48W36903 E Wisconsin Ave","Oconomowoc","53066","(262) 569-3155"],
- ["2160 Silvernail Rd","Pewaukee","53072","(262) 544-0072"],
- ["1850 Plover Rd","Plover","54467","(715) 342-0011"],
- ["4075 N Oakland Ave","Shorewood","53211","(414) 967-9218"],
- ["3650 University Ave","Shorewood Hills","53705","(608) 231-6935"],
- ["1500 Pinecrest Ave","Stevens Point","54481","(715) 345-1937"],
- ["2538 Ironwood Dr","Sun Prairie","53590","(608) 837-2785"],
- ["N65W24838 Main St","Sussex","53089","(262) 246-9151"],
- ["6950 W State St","Wauwatosa","53213","(414) 475-7181"]
-];
-function maps(a,c,z){return "https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(a+", "+c+", WI, "+z);}
-function tel(p){return "tel:"+p.replace(/[^\d]/g,"");}
-function esc(s){return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
-function fmtDate(iso){ if(!iso) return ""; const p=iso.split("-"); return p.length===3 ? p[1]+"-"+p[2]+"-"+p[0].slice(2) : iso; }
-const LS_KEY = "pnsmm-tracker-v1";
-let DATA = {};
-try{ DATA = JSON.parse(localStorage.getItem(LS_KEY) || "{}"); }catch(e){ DATA = {}; }
-function rec(id){ if(!DATA[id]) DATA[id]={date:"",rating:"",inv:{},note:"",_ts:0}; if(!DATA[id].inv) DATA[id].inv={}; return DATA[id]; }
-function touch(id){ rec(id)._ts = Date.now(); }
-function idOf(key,a,z){ return key+"|"+a+"|"+z; }
-const DATA_URL="https://picknsave-tracker-default-rtdb.firebaseio.com/data.json";
-let pushTimer=null, pollTimer=null;
-function nowt(){ return new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
-function setSync(m){ const el=document.getElementById('syncStatus'); if(el) el.textContent=m; }
-function save(){
-  try{ localStorage.setItem(LS_KEY, JSON.stringify(DATA)); }catch(e){}
-  clearTimeout(pushTimer); pushTimer=setTimeout(pushCloud,700);
+/* ---------- storage (works on GitHub Pages; degrades safely elsewhere) ---------- */
+const Store = (() => {
+  let mem = {}, ok = false;
+  try { const k='__probe'; localStorage.setItem(k,'1'); localStorage.removeItem(k); ok = true; } catch(e){ ok = false; }
+  return {
+    persistent: ok,
+    get(k){ try { return ok ? localStorage.getItem(k) : (k in mem ? mem[k] : null); } catch(e){ return k in mem ? mem[k] : null; } },
+    set(k,v){ try { ok ? localStorage.setItem(k,v) : (mem[k]=v); } catch(e){ mem[k]=v; } }
+  };
+})();
+const KEY = 'centauri_wfs_state_v1';
+
+/* ---------- Obsidian / disk sync config (Chromium File System Access API) ----------
+   You connect the tracker ONCE to your Obsidian publish folder. After that:
+   • AUTO-SYNC: every change is written to centauri-wfs-data.json inside that folder,
+     silently, so your data is always backed up and shared across browsers/devices
+     that point at the same folder.
+   • OBSIDIAN SYNC (manual buttons): reads your product .md notes from that folder.
+       – "Sync new"  → adds only notes whose SKU isn't in the tracker yet.
+       – "Sync all"  → refreshes every product's catalog fields from the notes.
+   qty lives only in the tracker (your notes don't carry it), so the tracker owns qty
+   and WFS completions decrement on-hand locally. */
+const DATA_FILENAME = 'centauri-wfs-data.json';
+const FS_SUPPORTED = (typeof window !== 'undefined' && 'showDirectoryPicker' in window);
+const OBSIDIAN_OWNS_QTY = false;     // tracker owns qty
+let dirHandle = null;                // connected Obsidian publish folder
+let fsReady = false;                 // handle present AND read/write permission granted
+let writeTimer = null;               // debounce for auto-writes
+
+/* ---------- timer window ---------- */
+const DAY = 86400000;
+let WINDOW = 7 * DAY;                       // changed by the Timer selector
+const fmtMoney = n => '$' + (Number(n)||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtMoney0 = n => '$' + Math.round(Number(n)||0).toLocaleString('en-US');
+const now = () => Date.now();
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+
+/* ---------- seed (your Energizer note; qty & margin are placeholders to edit) ---------- */
+const SEED = {
+  products: [{
+    id: uid(), name:"Energizer Ultimate Lithium AA 8pk", brand:"Energizer", sku:"AA08",
+    gtin:"00039800062826", itemid:"4291458", url:"https://www.walmart.com/ip/seort/4291458",
+    type:"Battery", condition:"New",
+    price:16.99, margin:60, qty:10,            // ← placeholders: set to your real on-hand & margin
+    estsales:355, listingscore:78, status:"Published",
+    kmprofit:"211.60", kmunits:"18", kmrevenue:"319.86", kmperiod:"6M (Dec 2025 – May 2026)",
+    notes:"Now $16.99 (was $25.00) · $2.12/ea · ⭐4.5 (2,879) · W+ eligible · LQS 78%"
+  }],
+  shipments: []
+};
+
+/* ---------- state ---------- */
+let state = load();
+function load(){
+  try { const raw = Store.get(KEY); if(raw){ const s = JSON.parse(raw); s.products ||= []; s.shipments ||= []; return s; } }
+  catch(e){}
+  return JSON.parse(JSON.stringify(SEED));
 }
-function mergeData(a,b){
-  const out={}, ids=new Set([...Object.keys(a||{}),...Object.keys(b||{})]);
-  ids.forEach(id=>{ const ra=a&&a[id], rb=b&&b[id];
-    out[id] = (ra&&rb) ? (((rb._ts||0)>(ra._ts||0))?rb:ra) : (ra||rb); });
+function save(){ state.lastSync = now(); Store.set(KEY, JSON.stringify(state)); scheduleWrite(); scheduleCloudWrite(); paintSync(); }
+function paintSync(){
+  const t = state.lastSync ? new Date(state.lastSync) : new Date();
+  const base = (Store.persistent ? 'Saved ' : 'Session ') + t.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+  document.getElementById('sync').textContent = (fsReady ? '◇ Folder · ' : '') + base;
+}
+
+/* ---------- derived ---------- */
+const estProfit = p => (Number(p.price)||0) * (Number(p.qty)||0) * ((Number(p.margin)||0)/100);
+const liveFor   = pid => state.shipments.filter(s => s.productId===pid && s.status==='live');
+const committed = pid => liveFor(pid).reduce((a,s)=>a + s.qty, 0);
+
+/* ---------- one-time migration: on-hand now drops at send-time ----------
+   Older data created live shipments WITHOUT reducing on-hand qty. Subtract
+   each product's in-flight (live) units from its qty once, so on-hand reflects
+   only what's physically still on the shelf. Flag prevents double-applying. */
+function migrateSendModel(){
+  if(state.sendModelV2) return;
+  state.products.forEach(p => {
+    const c = committed(p.id);
+    if(c>0) p.qty = Math.max(0, (Number(p.qty)||0) - c);
+  });
+  state.sendModelV2 = true;
+}
+
+/* ---------- reconcile expired shipments ---------- */
+function reconcile(){
+  let changed = false, banked = 0, msgs = [];
+  state.shipments.forEach(s => {
+    if(s.status==='live' && now() >= s.expiresAt){
+      s.status = 'completed'; s.completedAt = now();
+      // qty already left on-hand when the units were sent; just bank the profit here.
+      banked += s.totalProfit; changed = true;
+      msgs.push(`${s.qty}× ${s.name} received — ${fmtMoney(s.totalProfit)} banked`);
+    }
+  });
+  if(changed){ save(); if(msgs.length) toast(msgs[0] + (msgs.length>1?` (+${msgs.length-1} more)`:'')); }
+  return changed;
+}
+
+/* ---------- countdown formatting ---------- */
+function countdown(ms){
+  if(ms<=0) return {txt:'0:00:00:00', urgent:true, days:0};
+  const d=Math.floor(ms/DAY), h=Math.floor(ms%DAY/3600000), m=Math.floor(ms%3600000/60000), s=Math.floor(ms%60000/1000);
+  const pad=n=>String(n).padStart(2,'0');
+  return {txt:`${d}:${pad(h)}:${pad(m)}:${pad(s)}`, urgent: ms < DAY, days:d};
+}
+
+/* ---------- render ---------- */
+let query = '';
+function render(){
+  const q = query.trim().toLowerCase();
+  const prods = state.products.filter(p => !q || (p.name+' '+p.sku+' '+p.brand).toLowerCase().includes(q))
+    .sort((a,b) => (Number(b.qty)||0) - (Number(a.qty)||0));   // always highest qty on hand first
+
+  /* products */
+  const pl = document.getElementById('prod-list');
+  pl.innerHTML = prods.length ? '' : '<div class="empty">No products match. Add one with “+ Product”, or Import your published list.</div>';
+  prods.forEach(p => pl.appendChild(productCard(p)));
+  document.getElementById('prod-n').textContent = state.products.length + ' SKU' + (state.products.length===1?'':'s');
+
+  /* live */
+  const live = state.shipments.filter(s => s.status==='live').sort((a,b)=>a.expiresAt-b.expiresAt);
+  const ll = document.getElementById('live-list');
+  ll.innerHTML = live.length ? '' : '<div class="empty">No active shipments. Send units to WFS from a product above to start a 7-day clock.</div>';
+  live.forEach(s => ll.appendChild(shipCard(s)));
+  document.getElementById('live-n').textContent = live.length + ' live';
+
+  /* completed */
+  const done = state.shipments.filter(s => s.status==='completed').sort((a,b)=>b.completedAt-a.completedAt);
+  const dl = document.getElementById('done-list');
+  if(!done.length){ dl.innerHTML = '<div class="empty">Nothing completed yet. Finished shipments and their banked profit will log here.</div>'; }
+  else {
+    const realized = done.reduce((a,s)=>a+s.totalProfit,0);
+    let rows = done.map(s => `<tr>
+        <td>${new Date(s.sentAt).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}<div style="color:var(--muted);font-size:11px">sent · recv ${new Date(s.completedAt).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</div></td>
+        <td>${esc(s.name)}<div style="color:var(--muted);font-size:11px">${esc(s.sku)}</div></td>
+        <td class="r">${s.qty}</td>
+        <td class="r" style="font-family:var(--mono)">${fmtMoney(s.unitPrice)} · ${s.marginPct}%</td>
+        <td class="prof">${fmtMoney(s.totalProfit)}</td>
+      </tr>`).join('');
+    dl.innerHTML = `<table class="done-table">
+      <thead><tr><th>Sent</th><th>Product</th><th class="r">Qty</th><th class="r">Price · Margin</th><th class="r">Profit banked</th></tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr><td colspan="4" style="text-align:right;padding-top:13px" class="done-total">Realized total</td><td class="prof done-total" style="padding-top:13px">${fmtMoney(realized)}</td></tr></tfoot>
+    </table>`;
+  }
+  document.getElementById('done-n').textContent = done.length + ' shipment' + (done.length===1?'':'s');
+
+  paintStats();
+}
+
+function paintStats(){
+  const units = state.products.reduce((a,p)=>a+(Number(p.qty)||0),0);
+  const avail = state.products.reduce((a,p)=>a+estProfit(p),0);
+  const live = state.shipments.filter(s=>s.status==='live');
+  const transit = live.reduce((a,s)=>a+s.totalProfit,0);
+  const done = state.shipments.filter(s=>s.status==='completed');
+  const realized = done.reduce((a,s)=>a+s.totalProfit,0);
+  document.getElementById('s-units').textContent = units.toLocaleString('en-US');
+  document.getElementById('s-skus').textContent = state.products.length + ' published SKU' + (state.products.length===1?'':'s');
+  document.getElementById('s-avail').textContent = fmtMoney0(avail);
+  document.getElementById('s-transit').textContent = fmtMoney0(transit);
+  document.getElementById('s-transit-n').textContent = live.length + ' live shipment' + (live.length===1?'':'s');
+  document.getElementById('s-realized').textContent = fmtMoney0(realized);
+  document.getElementById('s-realized-n').textContent = done.length + ' completed';
+  document.getElementById('meta').textContent =
+    `${state.products.length} products · ${live.length} in transit · ${done.length} completed · profit = price × qty × margin`;
+}
+
+/* ---------- product card ---------- */
+function productCard(p){
+  const el = document.createElement('div');
+  el.className = 'prod' + ((Number(p.qty)||0)<=0 ? ' zero' : '');
+  const avail = Number(p.qty)||0;     // on-hand IS what's available; sent units already left
+  const ro  = '';
+  const roq = '';
+  const obsBadge = fsReady ? '<span class="badge obs">◇ Folder</span>' : '';
+  el.innerHTML = `
+    <div class="prod-head">
+      <span class="${p.image?'ico haspic':'ico'}" data-ico title="${p.image?'Click to change product photo':'Click to upload a product photo'}">${p.image?`<img src="${esc(p.image)}" alt="">`:'🔋'}</span>
+      <div class="pinfo">
+        <div class="pname">${esc(p.name)}</div>
+        <div class="psub"><span class="badge">${esc(p.status||'Published')}</span>${obsBadge}<span>${esc(p.brand||'')}</span><span class="sku">SKU ${esc(p.sku||'')}</span></div>
+        ${p.estsales?`<div class="psales">Est. monthly sales <b>${esc(p.estsales)}</b></div>`:''}
+      </div>
+      <div class="pprofit"><div class="v" data-profit>${fmtMoney(estProfit(p))}</div><div class="l">Est profit</div></div>
+      <span class="chev">▶</span>
+    </div>
+    <div class="strip">
+      <div class="fld"><label>Sale price $</label><input type="number" step="0.01" data-f="price" value="${p.price??''}" ${ro}></div>
+      <span class="eq">×</span>
+      <div class="fld"><label>Qty on hand</label><input type="number" step="1" data-f="qty" value="${p.qty??''}" ${roq}></div>
+      <span class="eq">×</span>
+      <div class="fld"><label>Margin %</label><input type="number" step="0.1" data-f="margin" value="${p.margin??''}" ${ro}></div>
+      <span class="eq">=</span>
+      <div class="fld calc"><label>Est profit</label><div class="calcval" data-profit2>${fmtMoney(estProfit(p))}</div></div>
+      <div class="send">
+        <div class="fld"><span class="avail">Avail ${avail}</span><label>Send to WFS</label><input type="number" step="1" min="1" max="${Math.max(0,avail)}" data-send placeholder="qty"></div>
+        <button class="sendbtn" data-sendbtn ${avail<=0?'disabled':''}>Send ▶</button>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="grid2">
+        <div class="kv"><span class="k">Item ID</span><span class="vv">${esc(p.itemid||'—')}</span></div>
+        <div class="kv"><span class="k">GTIN</span><span class="vv">${esc(p.gtin||'—')}</span></div>
+        <div class="kv"><span class="k">Condition</span><span class="vv">${esc(p.condition||'—')}</span></div>
+        <div class="kv"><span class="k">Est. monthly sales</span><span class="vv estsales-v">${esc(p.estsales||'—')}</span></div>
+        <div class="kv"><span class="k">Listing score</span><span class="vv">${esc(p.listingscore||'—')}</span></div>
+        <div class="kv"><span class="k">KwickMetrics profit</span><span class="vv">$${esc(p.kmprofit||'—')} <span style="color:var(--muted)">/ ${esc(p.kmperiod||'')}</span></span></div>
+        <div class="kv"><span class="k">KM units · revenue</span><span class="vv">${esc(p.kmunits||'—')} · $${esc(p.kmrevenue||'—')}</span></div>
+        <div class="kv"><span class="k">Walmart listing</span><span class="vv">${p.url?`<a href="${esc(p.url)}" target="_blank" rel="noopener">Open ↗</a>`:'—'}</span></div>
+      </div>
+      ${p.image?`<div class="prodpic"><img src="${esc(p.image)}" alt="${esc(p.name)}"></div>`:''}
+      <label class="kv"><span class="k">Notes</span></label>
+      <textarea class="note-area" data-f="notes" placeholder="Notes…">${esc(p.notes||'')}</textarea>
+      <div class="panel-act">
+        <button class="smallbtn" data-photo>${p.image?'Change photo':'Upload photo'}</button>
+        ${p.image?'<button class="smallbtn" data-rmphoto>Remove photo</button>':''}
+        <button class="smallbtn" data-del>Delete product</button>
+        <input type="file" accept="image/*" data-photofile hidden>
+      </div>
+    </div>`;
+
+  // expand toggle (ignore clicks on inputs)
+  el.querySelector('.prod-head').addEventListener('click', () => el.classList.toggle('open'));
+
+  // live recalc on edit
+  el.querySelectorAll('input[data-f],textarea[data-f]').forEach(inp => {
+    inp.addEventListener('input', () => {
+      const f = inp.dataset.f;
+      p[f] = (f==='notes') ? inp.value : (inp.value==='' ? '' : Number(inp.value));
+      const ep = fmtMoney(estProfit(p));
+      el.querySelector('[data-profit]').textContent = ep;
+      el.querySelector('[data-profit2]').textContent = ep;
+      el.classList.toggle('zero',(Number(p.qty)||0)<=0);
+      // refresh avail/send cap
+      const av = Number(p.qty)||0;
+      el.querySelector('.avail').textContent = 'Avail ' + av;
+      const sb = el.querySelector('[data-sendbtn]'); const si = el.querySelector('[data-send]');
+      sb.disabled = av<=0; si.max = Math.max(0,av);
+      save(); paintStats();
+    });
+  });
+
+  // send to WFS
+  const sendBtn = el.querySelector('[data-sendbtn]');
+  sendBtn.addEventListener('click', () => {
+    const si = el.querySelector('[data-send]');
+    const n = Math.floor(Number(si.value));
+    const av = Number(p.qty)||0;
+    if(!n || n<1){ si.focus(); return; }
+    if(n > av){ toast(`Only ${av} available to send`); return; }
+    sendToWFS(p, n); si.value='';
+  });
+
+  el.querySelector('[data-del]').addEventListener('click', () => {
+    if(confirm(`Delete “${p.name}”? Its completed shipment history stays in the ledger.`)){
+      state.products = state.products.filter(x => x.id!==p.id); save(); render();
+    }
+  });
+
+  // product photo
+  const fileInp = el.querySelector('[data-photofile]');
+  const icoEl = el.querySelector('[data-ico]');
+  if(icoEl) icoEl.addEventListener('click', e => { e.stopPropagation(); if(fileInp) fileInp.click(); });
+  const photoBtn = el.querySelector('[data-photo]'); if(photoBtn) photoBtn.addEventListener('click', () => fileInp && fileInp.click());
+  if(fileInp) fileInp.addEventListener('change', () => {
+    const f = fileInp.files[0]; if(!f) return;
+    resizeImage(f, 240, url => { if(!url){ toast('Could not read that image'); return; } p.image=url; save(); render(); toast('Photo added'); });
+    fileInp.value='';
+  });
+  const rmBtn = el.querySelector('[data-rmphoto]'); if(rmBtn) rmBtn.addEventListener('click', () => { delete p.image; save(); render(); toast('Photo removed'); });
+  return el;
+}
+
+/* ---------- live shipment card ---------- */
+function shipCard(s){
+  const el = document.createElement('div');
+  const left = s.expiresAt - now();
+  const cd = countdown(left);
+  el.className = 'ship' + (cd.urgent ? ' urgent' : '');
+  const elapsed = Math.min(1, Math.max(0, (now() - s.sentAt) / (s.expiresAt - s.sentAt)));
+  el.innerHTML = `
+    <div class="ship-top">
+      <div class="ship-name"><span class="q">${s.qty}×</span> ${esc(s.name)}</div>
+      <div class="countdown" data-cd>${cd.txt}</div>
+    </div>
+    <div class="ship-sub">
+      <span>SKU <b>${esc(s.sku)}</b></span>
+      <span>Sent <b>${new Date(s.sentAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</b></span>
+      <span>Auto-completes <b>${new Date(s.expiresAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})}</b></span>
+      <span>Profit pending <b style="color:var(--amber)">${fmtMoney(s.totalProfit)}</b></span>
+    </div>
+    <div class="bar"><i data-bar style="width:${elapsed*100}%"></i></div>
+    <div class="ship-act">
+      <button class="recv" data-recv>Mark received now</button>
+      <button class="cancel" data-cancel>Cancel (return qty)</button>
+    </div>`;
+  el.querySelector('[data-recv]').addEventListener('click', () => {
+    s.expiresAt = now(); reconcile(); render();
+  });
+  el.querySelector('[data-cancel]').addEventListener('click', () => {
+    if(confirm(`Cancel this shipment of ${s.qty}× ${s.name}? The ${s.qty} units return to on-hand; nothing is banked.`)){
+      const p = state.products.find(x => x.id===s.productId);
+      if(p) p.qty = (Number(p.qty)||0) + s.qty;     // give the units back to on-hand
+      state.shipments = state.shipments.filter(x => x.id!==s.id); save(); render();
+    }
+  });
+  el.dataset.expires = s.expiresAt; el.dataset.sent = s.sentAt;
+  return el;
+}
+
+/* ---------- send action ---------- */
+function sendToWFS(p, qty){
+  const unitPrice = Number(p.price)||0, marginPct = Number(p.margin)||0;
+  const unitProfit = unitPrice * marginPct/100;
+  const sentAt = now();
+  state.shipments.push({
+    id: uid(), productId: p.id, sku: p.sku, name: p.name,
+    qty, unitPrice, marginPct, unitProfit, totalProfit: unitProfit*qty,
+    sentAt, expiresAt: sentAt + WINDOW, status: 'live'
+  });
+  p.qty = Math.max(0, (Number(p.qty)||0) - qty);   // units leave on-hand the moment they ship
+  save(); render();
+  toast(`Sent ${qty}× ${p.name} to WFS — ${WINDOW<DAY?'1-min':'7-day'} clock started`);
+}
+
+/* ---------- live tick: update countdowns + auto-complete ---------- */
+setInterval(() => {
+  if(reconcile()){ render(); return; }
+  document.querySelectorAll('.ship').forEach(el => {
+    const exp = Number(el.dataset.expires), sent = Number(el.dataset.sent);
+    const left = exp - now();
+    const cd = countdown(left);
+    const cdEl = el.querySelector('[data-cd]'); if(cdEl) cdEl.textContent = cd.txt;
+    el.classList.toggle('urgent', cd.urgent);
+    const bar = el.querySelector('[data-bar]');
+    if(bar){ const e = Math.min(1,Math.max(0,(now()-sent)/(exp-sent))); bar.style.width=(e*100)+'%'; }
+  });
+}, 1000);
+
+/* ---------- toast ---------- */
+let toastTimer;
+function toast(msg){
+  const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(()=>t.classList.remove('show'), 3400);
+}
+
+/* ---------- helpers ---------- */
+function esc(s){ return String(s??'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+/* downscale an uploaded image to a small JPEG data URL so it stays light to store & sync */
+function resizeImage(file, maxDim, cb){
+  const r = new FileReader();
+  r.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      let w=img.width, h=img.height;
+      const s = Math.min(1, maxDim/Math.max(w,h));
+      w=Math.round(w*s); h=Math.round(h*s);
+      const c=document.createElement('canvas'); c.width=w; c.height=h;
+      const ctx=c.getContext('2d'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,w,h); ctx.drawImage(img,0,0,w,h);
+      try { cb(c.toDataURL('image/jpeg',0.82)); } catch(e){ cb(null); }
+    };
+    img.onerror=()=>cb(null); img.src=r.result;
+  };
+  r.onerror=()=>cb(null); r.readAsDataURL(file);
+}
+
+/* ---------- controls wiring ---------- */
+document.getElementById('q').addEventListener('input', e => { query = e.target.value; render(); });
+document.getElementById('timermode').addEventListener('change', e => {
+  WINDOW = e.target.value==='1m' ? 60000 : 7*DAY;
+  toast('New shipments now use a ' + (WINDOW<DAY?'1-minute test':'7-day') + ' window');
+});
+
+// folder + Obsidian sync
+document.getElementById('fsbtn').addEventListener('click', connectFolder);
+document.getElementById('syncnew').addEventListener('click', () => syncFromObsidian('new'));
+document.getElementById('syncall').addEventListener('click', () => {
+  if(confirm('Refresh every product’s details (name, price, margin, etc.) from your Obsidian notes? Quantities and shipment history are kept.')) syncFromObsidian('all');
+});
+
+// add product
+const addform = document.getElementById('addform');
+document.getElementById('addbtn').addEventListener('click', ()=> addform.classList.toggle('open'));
+document.getElementById('a-cancel').addEventListener('click', ()=> addform.classList.remove('open'));
+let addPhoto = '';
+document.getElementById('a-photo-btn').addEventListener('click', ()=> document.getElementById('a-photo').click());
+document.getElementById('a-photo').addEventListener('change', function(){
+  const f = this.files[0]; if(!f) return;
+  resizeImage(f, 240, url => {
+    addPhoto = url || '';
+    document.getElementById('a-photo-name').textContent = addPhoto ? ('✓ '+f.name) : 'couldn’t read image';
+  });
+});
+document.getElementById('a-save').addEventListener('click', () => {
+  const g = id => document.getElementById(id).value.trim();
+  const name = g('a-name'); if(!name){ document.getElementById('a-name').focus(); return; }
+  const prod = {
+    id: uid(), name, brand:g('a-brand'), sku:g('a-sku'), gtin:g('a-gtin'), itemid:g('a-itemid'), url:g('a-url'),
+    type:g('a-type'), condition:g('a-condition')||'New',
+    price:Number(g('a-price'))||0, margin:Number(g('a-margin'))||0, qty:Number(g('a-qty'))||0,
+    estsales:g('a-estsales'), listingscore:g('a-listingscore'), status:g('a-status')||'Published',
+    kmprofit:g('a-kmprofit'), kmunits:g('a-kmunits'), kmrevenue:g('a-kmrevenue'), kmperiod:g('a-kmperiod'),
+    notes:document.getElementById('a-notes').value.trim()
+  };
+  if(addPhoto) prod.image = addPhoto;
+  state.products.unshift(prod);
+  ['a-name','a-brand','a-sku','a-price','a-margin','a-qty','a-gtin','a-itemid','a-type','a-estsales','a-listingscore','a-url','a-kmprofit','a-kmunits','a-kmrevenue','a-kmperiod'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('a-condition').value='New'; document.getElementById('a-status').value='Published';
+  document.getElementById('a-notes').value=''; addPhoto=''; document.getElementById('a-photo-name').textContent='';
+  addform.classList.remove('open'); save(); render(); toast('Product added');
+});
+
+// export
+document.getElementById('exportbtn').addEventListener('click', () => {
+  const blob = new Blob([JSON.stringify(state,null,2)], {type:'application/json'});
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'centauri-wfs-' + new Date().toISOString().slice(0,10) + '.json'; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 1000); toast('Exported JSON');
+});
+
+// import (accepts full state OR a products array; products merge by SKU)
+document.getElementById('importbtn').addEventListener('click', ()=> document.getElementById('importfile').click());
+document.getElementById('importfile').addEventListener('change', e => {
+  const f = e.target.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const data = JSON.parse(r.result);
+      if(Array.isArray(data)){
+        data.forEach(np => {
+          if(!np || !np.sku) { np.id=uid(); state.products.unshift(np); return; }
+          const ex = state.products.find(x => x.sku===np.sku);
+          if(ex){ Object.assign(ex, np, {id:ex.id}); } else { np.id=uid(); state.products.unshift(np); }
+        });
+      } else if(data && data.products){
+        if(!confirm('Replace current data with the imported file?')) return;
+        data.products.forEach(p=>p.id ||= uid());
+        (data.shipments||[]).forEach(s=>s.id ||= uid());
+        state = {products:data.products, shipments:data.shipments||[]};
+      } else { toast('Unrecognized file'); return; }
+      save(); render(); toast('Imported');
+    } catch(err){ toast('Could not read that JSON'); }
+    e.target.value='';
+  };
+  r.readAsText(f);
+});
+
+/* =====================================================================
+   File System Access sync  (Chrome / Edge / Brave / Opera)
+   ===================================================================== */
+
+/* ---- tiny IndexedDB store so the folder handle survives page reloads ---- */
+const HandleDB = (() => {
+  const DB='centauri_fs', STORE='handles';
+  function open(){ return new Promise((res,rej)=>{ const r=indexedDB.open(DB,1);
+    r.onupgradeneeded=()=>r.result.createObjectStore(STORE);
+    r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
+  return {
+    async get(k){ try{ const db=await open(); return await new Promise((res,rej)=>{
+      const t=db.transaction(STORE,'readonly').objectStore(STORE).get(k);
+      t.onsuccess=()=>res(t.result); t.onerror=()=>rej(t.error); }); }catch(e){ return null; } },
+    async set(k,v){ try{ const db=await open(); return await new Promise((res,rej)=>{
+      const t=db.transaction(STORE,'readwrite').objectStore(STORE).put(v,k);
+      t.onsuccess=()=>res(); t.onerror=()=>rej(t.error); }); }catch(e){} }
+  };
+})();
+
+async function ensurePermission(handle, mode='readwrite'){
+  const opts={mode};
+  if((await handle.queryPermission(opts))==='granted') return true;
+  if((await handle.requestPermission(opts))==='granted') return true;
+  return false;
+}
+
+/* ---- connect (user gesture) ---- */
+async function connectFolder(){
+  if(!FS_SUPPORTED){ toast('Auto-sync needs Chrome, Edge or Brave'); return; }
+  try { dirHandle = await window.showDirectoryPicker({mode:'readwrite', id:'centauri-obsidian'}); }
+  catch(e){ return; }                                   // user cancelled the picker
+  if(!await ensurePermission(dirHandle)){ toast('Permission denied'); return; }
+  await HandleDB.set('dir', dirHandle);
+  fsReady = true;
+  await loadFromFolder();                                // pull existing data file if present
+  await writeData();                                     // make sure the data file exists
+  paintFs(); paintSync(); render();
+  toast('Folder connected — auto-sync on');
+}
+
+/* ---- restore on load (no gesture: can only query, not request) ---- */
+async function restoreFolder(){
+  if(!FS_SUPPORTED) return;
+  const h = await HandleDB.get('dir');
+  if(!h){ paintFs(); return; }
+  dirHandle = h;
+  if((await h.queryPermission({mode:'readwrite'}))==='granted'){
+    fsReady = true; await loadFromFolder(); render();
+  } else {
+    fsReady = false;                                     // needs a click to re-grant
+  }
+  paintFs(); paintSync();
+}
+
+/* ---- auto-write state → data file (debounced) ---- */
+async function writeData(){
+  if(!fsReady || !dirHandle) return;
+  try {
+    const fh = await dirHandle.getFileHandle(DATA_FILENAME, {create:true});
+    const w  = await fh.createWritable();
+    await w.write(JSON.stringify(state, null, 2));
+    await w.close();
+    state.lastFsWrite = now(); paintFs();
+  } catch(e){ console.warn('auto-sync write failed', e); }
+}
+function scheduleWrite(){
+  if(!fsReady) return;
+  clearTimeout(writeTimer);
+  writeTimer = setTimeout(writeData, 700);
+}
+
+/* ---- load state from the data file ---- */
+async function loadFromFolder(){
+  if(!dirHandle) return;
+  try {
+    const fh = await dirHandle.getFileHandle(DATA_FILENAME);
+    const txt = await (await fh.getFile()).text();
+    const s = JSON.parse(txt);
+    if(s && Array.isArray(s.products)){
+      state = {products:s.products, shipments:s.shipments||[], lastSync:s.lastSync};
+      state.products.forEach(p=>p.id ||= uid());
+      state.shipments.forEach(x=>x.id ||= uid());
+      reconcile(); migrateSendModel(); Store.set(KEY, JSON.stringify(state));
+    }
+  } catch(e){ /* no data file yet — fine, we'll create one */ }
+}
+
+/* =====================================================================
+   Obsidian markdown → tracker  (manual buttons)
+   ===================================================================== */
+const OBS_CATALOG = ['name','brand','gtin','itemid','url','type','condition','price','margin','estsales','listingscore','status','notes'];
+
+function parseFrontmatter(text){
+  const m = text.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if(!m) return null;
+  const fm = {}; let key=null;
+  m[1].split(/\r?\n/).forEach(line=>{
+    const kv = line.match(/^([A-Za-z0-9_]+):\s?(.*)$/);
+    if(kv){
+      key = kv[1]; let v = kv[2].trim();
+      if((v.startsWith('"')&&v.endsWith('"'))||(v.startsWith("'")&&v.endsWith("'"))) v=v.slice(1,-1);
+      fm[key] = v;                                        // '' when empty / a list header
+    } else if(/^\s*-\s+/.test(line) && key){
+      if(!Array.isArray(fm[key])) fm[key]=[];
+      fm[key].push(line.replace(/^\s*-\s+/,'').replace(/^["']|["']$/g,''));
+    }
+  });
+  return fm;
+}
+function extractName(text, filename){
+  const h = text.match(/^#\s+(.+)$/m);
+  return (h ? h[1] : filename.replace(/\.md$/i,'')).trim();
+}
+function extractNotes(text){
+  const m = text.match(/##[^\n]*Notes\s*\r?\n([\s\S]*?)(?:\r?\n#{1,6}\s|\r?\n---|$)/);
+  if(!m) return '';
+  return m[1].split(/\r?\n/).map(l=>l.replace(/^\s*[-*]\s+/,'').trim())
+             .filter(Boolean).join(' · ').replace(/\*\*/g,'').slice(0,600);
+}
+const numOrBlank = v => (v===''||v==null) ? '' : (isNaN(Number(v)) ? v : Number(v));
+
+async function readObsidianProducts(){
+  const out = [];
+  for await (const entry of dirHandle.values()){
+    if(entry.kind!=='file' || !/\.md$/i.test(entry.name)) continue;
+    if(entry.name === DATA_FILENAME) continue;
+    const text = await (await entry.getFile()).text();
+    const fm = parseFrontmatter(text);
+    if(!fm || !fm.sku) continue;                          // only product notes (need a SKU)
+    out.push({
+      name: extractName(text, entry.name),
+      brand: fm.brand||'', sku: String(fm.sku), gtin: fm.gtin||'', itemid: fm.itemid||'',
+      url: fm.url||'', type: fm.type||'', condition: fm.condition||'New',
+      price: numOrBlank(fm.price), margin: numOrBlank(fm.margin),
+      estsales: fm.estsales||'', listingscore: fm.listingscore||'',
+      status: fm.status||'Published', notes: extractNotes(text)
+    });
+  }
   return out;
 }
-async function pushCloud(){
-  try{
-    const r=await fetch(DATA_URL,{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify(JSON.stringify(DATA))});
-    setSync(r.ok ? ("✓ synced "+nowt()) : "⚠️ sync error");
-  }catch(e){ setSync("⚠️ offline — will retry"); }
-}
-async function pullCloud(announce){
-  try{
-    const r=await fetch(DATA_URL);
-    if(!r.ok){ if(announce) setSync("⚠️ couldn't reach cloud"); return; }
-    const raw=await r.json();
-    const remote = raw ? JSON.parse(raw) : {};
-    DATA=mergeData(DATA, remote);
-    try{ localStorage.setItem(LS_KEY,JSON.stringify(DATA)); }catch(e){}
-    render();
-    if(announce) setSync("✓ up to date "+nowt());
-  }catch(e){ if(announce) setSync("⚠️ offline"); }
-}
-function startPoll(){ clearInterval(pollTimer); pollTimer=setInterval(()=>pullCloud(true),15000); }
-async function initCloud(){
-  setSync("connecting…");
-  await pullCloud(false);
-  await pushCloud();
-  setSync("✓ synced "+nowt());
-  startPoll();
-}
-const ORIGIN_ZIP="53074";
-const ALL_ZIPS=[...new Set([...PNS,...MM].map(r=>r[2]))];
-let zipCoords={}; try{ zipCoords=JSON.parse(localStorage.getItem("pnsmm-zip")||"{}"); }catch(e){ zipCoords={}; }
-let distMap={};
-let driveMap={};
-let originCoords=null;
-let sortByDistance=false;
-function milesBetween(a,b){ const R=3958.8,toR=x=>x*Math.PI/180; const dLat=toR(b.lat-a.lat),dLng=toR(b.lng-a.lng); const s=Math.sin(dLat/2)**2+Math.cos(toR(a.lat))*Math.cos(toR(b.lat))*Math.sin(dLng/2)**2; return 2*R*Math.asin(Math.sqrt(s)); }
-function computeDistMap(){ const o=originCoords||zipCoords[ORIGIN_ZIP]; if(!o) return; distMap={}; ALL_ZIPS.forEach(z=>{ if(zipCoords[z]) distMap[z]=Math.round(milesBetween(o,zipCoords[z])); }); }
-function distVal(z){ if(driveMap[z]) return driveMap[z].mi; if(distMap[z]!=null) return distMap[z]; return 1e9; }
-function fmtMin(s){ const m=Math.round(s/60); return m>=60 ? (Math.floor(m/60)+"h "+(m%60)+"m") : (m+"m"); }
-function fmtDist(z){ const d=driveMap[z]; if(d) return "🚗 "+d.mi+" mi · "+d.t; return (distMap[z]!=null) ? ("🚗 ~"+distMap[z]+" mi") : "…"; }
-async function ensureDistances(){
-  const need=[...new Set([ORIGIN_ZIP,...ALL_ZIPS])].filter(z=>!zipCoords[z]);
-  if(need.length){
-    await Promise.all(need.map(async z=>{
-      try{ const r=await fetch("https://api.zippopotam.us/us/"+z); if(r.ok){ const j=await r.json(); const p=j.places&&j.places[0]; if(p) zipCoords[z]={lat:+p.latitude,lng:+p.longitude}; } }catch(e){}
-    }));
-    try{ localStorage.setItem("pnsmm-zip", JSON.stringify(zipCoords)); }catch(e){}
-  }
-  computeDistMap();
-  if(sortByDistance) render(); else updateDistSpans();
-}
-async function ensureDriving(){
-  const o=originCoords||zipCoords[ORIGIN_ZIP];
-  if(!o) return;
-  const zips=ALL_ZIPS.filter(z=>zipCoords[z]);
-  if(!zips.length) return;
-  const coords=[o,...zips.map(z=>zipCoords[z])].map(c=>c.lng+","+c.lat).join(";");
-  try{
-    const r=await fetch("https://router.project-osrm.org/table/v1/driving/"+coords+"?sources=0&annotations=distance,duration");
-    if(!r.ok) return;
-    const j=await r.json();
-    if(j.code!=="Ok"||!j.distances||!j.durations) return;
-    const dist=j.distances[0], dur=j.durations[0];
-    const dm={};
-    zips.forEach((z,i)=>{ const m=dist[i+1], s=dur[i+1]; if(m!=null&&s!=null){ dm[z]={mi:Math.round(m/1609.34), t:fmtMin(s)}; } });
-    driveMap=dm;
-    if(sortByDistance) render(); else updateDistSpans();
-  }catch(e){}
-}
-function updateDistSpans(){ document.querySelectorAll('.dist').forEach(el=>{ el.textContent=fmtDist(el.dataset.zip); }); }
-function setMyLoc(html){ const el=document.getElementById('myLoc'); if(el){ el.innerHTML=html; el.style.display=html?'':'none'; } }
-async function showMyLocationAddress(lat,lng){
-  const gmaps="https://www.google.com/maps/search/?api=1&query="+lat+","+lng;
-  const coords=lat.toFixed(5)+", "+lng.toFixed(5);
-  setMyLoc('📍 Your location: <a href="'+gmaps+'" target="_blank" rel="noopener">finding address…</a>');
-  try{
-    const r=await fetch("https://nominatim.openstreetmap.org/reverse?format=json&zoom=18&addressdetails=0&lat="+lat+"&lon="+lng,{headers:{"Accept":"application/json"}});
-    const j=await r.json();
-    const a=(j&&j.display_name)?j.display_name:coords;
-    setMyLoc('📍 Your location: <a href="'+gmaps+'" target="_blank" rel="noopener">'+esc(a)+'</a>');
-  }catch(e){
-    setMyLoc('📍 Your location: <a href="'+gmaps+'" target="_blank" rel="noopener">'+esc(coords)+'</a>');
-  }
-}
-function useMyLocation(){
-  if(!navigator.geolocation){ alert("Your browser can't share location."); return; }
-  setSync("📍 getting your location…");
-  navigator.geolocation.getCurrentPosition(
-    pos=>{ const la=pos.coords.latitude, ln=pos.coords.longitude; originCoords={lat:la,lng:ln}; sortByDistance=true; driveMap={}; computeDistMap(); render(); setSync("📍 sorted nearest-first from your location"); showMyLocationAddress(la,ln); ensureDriving(); },
-    err=>{ setSync("⚠️ location unavailable"); alert("Couldn't get your location — make sure location access is allowed for this site."); },
-    {enableHighAccuracy:true, timeout:10000, maximumAge:60000}
-  );
-}
-function useHome(){ originCoords=null; sortByDistance=false; driveMap={}; computeDistMap(); render(); setMyLoc(''); setSync("🏠 distances from Port Washington"); ensureDriving(); }
-computeDistMap();
-const banners=[{key:"pns",tag:"Pick 'n Save",rows:PNS},{key:"mm",tag:"Metro Market",rows:MM}];
-const app=document.getElementById('app');
-const countEl=document.getElementById('count');
-const emptyEl=document.getElementById('empty');
-let filter="all", query="", openSet=new Set();
-function ratingSelect(id,val){
-  let o=RATINGS.map(r=>'<option value="'+r.v+'"'+(r.v===val?' selected':'')+'>'+r.t+'</option>').join('');
-  return '<select class="rate" data-id="'+esc(id)+'" data-v="'+esc(val)+'">'+o+'</select>';
-}
-function invSelect(id,bk,val){
-  let o=INV.map(r=>'<option value="'+r.v+'"'+(r.v===val?' selected':'')+'>'+r.t+'</option>').join('');
-  return '<select data-id="'+esc(id)+'" data-bk="'+esc(bk)+'" data-v="'+esc(val)+'">'+o+'</select>';
-}
-function buildStore(bkey, r){
-  const [a,c,z,p]=r;
-  const id=idOf(bkey,a,z);
-  const d=rec(id);
-  const isOpen=openSet.has(id);
-  const dotColor=d.rating?RATING_COLOR[d.rating]:"#3A3F48";
-  const hasNote=!!(d.note&&d.note.trim());
-  const wrap=document.createElement('div');
-  wrap.className="store-wrap "+bkey;
-  wrap.style.borderLeftColor=dotColor;
-  wrap.dataset.id=id;
-  const batRows=BATTERIES.map(bt=>
-    '<div class="bat"><span class="bn">'+esc(bt.n)+'</span>'+invSelect(id,bt.k,d.inv[bt.k]||"")+'</div>'
-  ).join('');
-  wrap.innerHTML=
-    '<div class="store">'+
-      '<span class="pin">'+PIN+'</span>'+
-      '<div class="info">'+
-        '<a class="addr" href="'+maps(a,c,z)+'" target="_blank" rel="noopener">'+esc(a)+'</a>'+
-        '<div class="sub">'+esc(c)+', WI '+esc(z)+' &middot; <a href="'+tel(p)+'">'+esc(p)+'</a> &middot; <span class="dist" data-zip="'+esc(z)+'">'+fmtDist(z)+'</span></div>'+
-      '</div>'+
-      '<div class="rowmeta">'+
-        '<span class="noteflag">'+(hasNote?'📝':'')+'</span>'+
-        '<span class="rate-emoji">'+(d.rating?RATING_EMOJI[d.rating]:'')+'</span>'+
-        '<span class="when">'+(d.date?esc(fmtDate(d.date)):'')+'</span>'+
-        '<button class="toggle">'+(isOpen?'Close':'Check')+'</button>'+
-        '<a class="go" href="'+maps(a,c,z)+'" target="_blank" rel="noopener">Map ↗</a>'+
-      '</div>'+
-    '</div>'+
-    '<div class="panel'+(isOpen?' open':'')+'">'+
-      '<div class="panel-top">'+
-        '<div class="fld"><label>Date checked</label><input type="date" class="dt" data-id="'+esc(id)+'" value="'+esc(d.date||"")+'"></div>'+
-        '<div class="fld"><label>Store rating</label>'+ratingSelect(id,d.rating||"")+'</div>'+
-      '</div>'+
-      '<div class="bat-head">Battery inventory</div>'+
-      '<div class="bat-grid">'+batRows+'</div>'+
-      '<div class="bat-head">Notes</div>'+
-      '<textarea class="note-area" placeholder="Notes about this store — hours, layout, what is stocked, contacts…">'+esc(d.note||"")+'</textarea>'+
-    '</div>';
-  wrap.querySelector('.toggle').addEventListener('click',function(){
-    const panel=wrap.querySelector('.panel');
-    const nowOpen=!panel.classList.contains('open');
-    panel.classList.toggle('open',nowOpen);
-    this.textContent=nowOpen?'Close':'Check';
-    if(nowOpen) openSet.add(id); else openSet.delete(id);
+
+async function syncFromObsidian(mode){                    // mode: 'new' | 'all'
+  if(!fsReady || !dirHandle){ toast('Connect your Obsidian folder first'); connectFolder(); return; }
+  let items;
+  try { items = await readObsidianProducts(); }
+  catch(e){ toast('Could not read the folder'); return; }
+  if(!items.length){ toast('No product notes (.md with a SKU) found'); return; }
+  let added=0, updated=0;
+  items.forEach(np => {
+    const ex = state.products.find(x => x.sku===np.sku);
+    if(ex){
+      if(mode==='all'){
+        OBS_CATALOG.forEach(f => { if(np[f]!==undefined && np[f]!=='') ex[f]=np[f]; });
+        updated++;
+      }                                                   // 'new' leaves existing untouched
+    } else {
+      np.id = uid(); np.qty = 0; np.kmprofit=''; np.kmunits=''; np.kmrevenue=''; np.kmperiod='';
+      state.products.unshift(np); added++;
+    }
   });
-  wrap.querySelector('.dt').addEventListener('change',function(){
-    rec(id).date=this.value; touch(id); save();
-    wrap.querySelector('.when').textContent=fmtDate(this.value);
-  });
-  const rsel=wrap.querySelector('select.rate');
-  rsel.addEventListener('change',function(){
-    rec(id).rating=this.value; touch(id); save();
-    this.dataset.v=this.value;
-    const col=this.value?RATING_COLOR[this.value]:"#3A3F48";
-    wrap.querySelector('.rate-emoji').textContent=this.value?RATING_EMOJI[this.value]:'';
-    wrap.style.borderLeftColor=col;
-  });
-  wrap.querySelectorAll('.bat select').forEach(sel=>{
-    sel.addEventListener('change',function(){
-      rec(id).inv[this.dataset.bk]=this.value; touch(id); save();
-      this.dataset.v=this.value;
-    });
-  });
-  const nt=wrap.querySelector('.note-area');
-  nt.addEventListener('input',function(){
-    rec(id).note=this.value; touch(id); save();
-    wrap.querySelector('.noteflag').textContent=this.value.trim()?'📝':'';
-  });
-  return wrap;
+  save(); render();
+  toast(mode==='all' ? `Synced all — ${added} new, ${updated} updated` : `Synced new — ${added} added`);
 }
-function render(){
-  app.innerHTML="";
-  const q=query.trim().toLowerCase();
-  let items=[];
-  banners.forEach(b=>{
-    if(filter!=="all"&&filter!==b.key) return;
-    b.rows.forEach(r=>{ if(!q||(r[0]+" "+r[1]+" "+r[2]).toLowerCase().includes(q)) items.push([b.key,r]); });
-  });
-  const shown=items.length;
-  if(sortByDistance){
-    items.sort((x,y)=> distVal(x[1][2]) - distVal(y[1][2]));
-    const sec=document.createElement('section');
-    sec.className="banner";
-    sec.innerHTML='<div class="banner-head"><span class="banner-tag" style="background:var(--mm)">📍 Nearest first</span><span class="n">'+shown+' stores</span></div>';
-    items.forEach(it=> sec.appendChild(buildStore(it[0], it[1])));
-    app.appendChild(sec);
-  } else {
-    banners.forEach(b=>{
-      if(filter!=="all"&&filter!==b.key) return;
-      const matches=b.rows.filter(r=>!q||(r[0]+" "+r[1]+" "+r[2]).toLowerCase().includes(q));
-      if(!matches.length) return;
-      const sec=document.createElement('section');
-      sec.className="banner "+b.key;
-      sec.innerHTML='<div class="banner-head"><span class="banner-tag">'+b.tag+'</span><h2>Wisconsin</h2><span class="n">'+matches.length+' of '+b.rows.length+'</span></div>';
-      let lastCity=null;
-      matches.forEach(r=>{ if(r[1]!==lastCity){const h=document.createElement('div');h.className="city";h.textContent=r[1];sec.appendChild(h);lastCity=r[1];} sec.appendChild(buildStore(b.key,r)); });
-      app.appendChild(sec);
-    });
-  }
-  emptyEl.classList.toggle('show',shown===0);
-  countEl.textContent=shown+(shown===1?" store":" stores");
+
+/* ---- folder status chip ---- */
+function paintFs(){
+  const b = document.getElementById('fsbtn'); if(!b) return;
+  const sn = document.getElementById('syncbtns');
+  if(!FS_SUPPORTED){ b.textContent='Folder sync: Chrome/Edge only'; b.disabled=true; if(sn) sn.style.display='none'; return; }
+  if(fsReady){ b.textContent='◇ Folder connected'; b.classList.add('go'); if(sn) sn.style.display='flex'; }
+  else if(dirHandle){ b.textContent='◇ Reconnect folder'; b.classList.remove('go'); if(sn) sn.style.display='flex'; }
+  else { b.textContent='◇ Connect folder'; b.classList.remove('go'); if(sn) sn.style.display='none'; }
 }
-document.getElementById('q').addEventListener('input',e=>{query=e.target.value;render();});
-document.querySelectorAll('.chip').forEach(ch=>{
-  ch.addEventListener('click',()=>{
-    filter=ch.dataset.f;
-    document.querySelectorAll('.chip').forEach(c=>c.setAttribute('aria-pressed',c===ch?"true":"false"));
-    render();
-  });
+
+/* =====================================================================
+   Cloud sync (Firebase Firestore) — works on phone AND desktop
+   ===================================================================== */
+const CLOUD_CFG_KEY='centauri_cloud_cfg', CLOUD_CODE_KEY='centauri_cloud_code';
+let cloudReady=false, cloudDoc=null, cloudUnsub=null, cloudWriteTimer=null, applyingRemote=false;
+const clientId = uid();
+
+function parseConfig(text){           // accept full snippet or bare object; keys may be unquoted
+  const a=text.indexOf('{'), b=text.lastIndexOf('}');
+  if(a<0||b<0) return null;
+  try { return (new Function('return (' + text.slice(a,b+1) + ')'))(); } catch(e){ return null; }
+}
+function genCode(){ return (uid()+uid()+uid()).replace(/[^a-z0-9]/gi,'').slice(0,24); }
+
+function scheduleCloudWrite(){
+  if(!cloudReady || applyingRemote) return;
+  clearTimeout(cloudWriteTimer);
+  cloudWriteTimer=setTimeout(cloudPush, 600);
+}
+async function cloudPush(){
+  if(!cloudReady || !cloudDoc) return;
+  try { await cloudDoc.set({ state: JSON.stringify(state), updatedAt: Date.now(), origin: clientId }); }
+  catch(e){ console.warn('cloud push failed', e); cloudStatus('Push failed: '+(e&&e.message||e)); }
+}
+function applyRemote(d){
+  if(!d || !d.state || d.origin===clientId) return;     // ignore empty + our own echo
+  let s; try { s=JSON.parse(d.state); } catch(e){ return; }
+  if(!s || !Array.isArray(s.products)) return;
+  applyingRemote=true;
+  state={products:s.products, shipments:s.shipments||[], lastSync:s.lastSync, sendModelV2:s.sendModelV2};
+  state.products.forEach(p=>p.id ||= uid()); state.shipments.forEach(x=>x.id ||= uid());
+  reconcile(); migrateSendModel();
+  Store.set(KEY, JSON.stringify(state));
+  if(fsReady) writeData();
+  render(); paintCloud();
+  applyingRemote=false;
+}
+async function cloudConnect(cfg, code, opts={}){
+  if(typeof firebase==='undefined'){ cloudStatus('Firebase library didn’t load (offline?)'); return false; }
+  try {
+    if(!firebase.apps || !firebase.apps.length) firebase.initializeApp(cfg);
+    await firebase.auth().signInAnonymously();
+    cloudDoc = firebase.database().ref('trackers/' + code);
+    cloudReady = true;
+    const snap = await cloudDoc.once('value');
+    const val = snap && snap.val ? snap.val() : null;
+    if(val && val.state){ applyRemote(val); }    // pull existing
+    else { await cloudPush(); }                  // seed it
+    if(cloudUnsub) cloudUnsub();
+    const handler = cloudDoc.on('value', s => { const v=s.val(); if(v) applyRemote(v); });
+    cloudUnsub = () => cloudDoc.off('value', handler);
+    Store.set(CLOUD_CFG_KEY, JSON.stringify(cfg)); Store.set(CLOUD_CODE_KEY, code);
+    paintCloud(); cloudStatus('Connected · syncing as code “'+code+'”');
+    if(!opts.silent) toast('Cloud sync on');
+    return true;
+  } catch(e){ cloudReady=false; cloudStatus('Connect failed: '+(e&&e.message||e)); return false; }
+}
+function cloudDisconnect(){
+  if(cloudUnsub) cloudUnsub(); cloudUnsub=null; cloudReady=false; cloudDoc=null;
+  Store.set(CLOUD_CFG_KEY,''); Store.set(CLOUD_CODE_KEY,'');
+  paintCloud(); cloudStatus('Disconnected. This device no longer syncs.');
+}
+function cloudStatus(msg){ const el=document.getElementById('c-status'); if(el) el.textContent=msg; }
+function paintCloud(){
+  const b=document.getElementById('cloudbtn'); if(!b) return;
+  if(cloudReady){ b.textContent='☁ Cloud on'; b.classList.add('go'); }
+  else { b.textContent='☁ Cloud'; b.classList.remove('go'); }
+}
+function cloudBoot(){
+  const cfgRaw=Store.get(CLOUD_CFG_KEY), code=Store.get(CLOUD_CODE_KEY);
+  if(cfgRaw && code){ try { cloudConnect(JSON.parse(cfgRaw), code, {silent:true}); } catch(e){} }
+}
+
+/* cloud UI wiring */
+const cloudform=document.getElementById('cloudform');
+document.getElementById('cloudbtn').addEventListener('click', ()=>{
+  const cfg=Store.get(CLOUD_CFG_KEY), code=Store.get(CLOUD_CODE_KEY);
+  if(cfg) document.getElementById('c-config').value=cfg;
+  document.getElementById('c-code').value = code || '';
+  cloudform.classList.toggle('open');
+  if(cloudReady) cloudStatus('Connected · syncing as code “'+(code||'')+'”');
 });
-document.getElementById('exportBtn').addEventListener('click',()=>{
-  const blob=new Blob([JSON.stringify(DATA,null,2)],{type:"application/json"});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');
-  a.href=url; a.download="pns-mm-tracker-"+new Date().toISOString().slice(0,10)+".json";
-  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+document.getElementById('c-cancel').addEventListener('click', ()=> cloudform.classList.remove('open'));
+document.getElementById('c-disconnect').addEventListener('click', cloudDisconnect);
+document.getElementById('c-copy').addEventListener('click', ()=>{
+  const code=document.getElementById('c-code').value.trim();
+  if(code && navigator.clipboard){ navigator.clipboard.writeText(code); toast('Sync code copied'); }
 });
-document.getElementById('importBtn').addEventListener('click',()=>document.getElementById('importFile').click());
-document.getElementById('importFile').addEventListener('change',function(){
-  const f=this.files[0]; if(!f) return;
-  const reader=new FileReader();
-  reader.onload=()=>{
-    try{
-      const obj=JSON.parse(reader.result);
-      if(obj&&typeof obj==="object"){ DATA=obj; save(); render(); alert("Data imported."); }
-      else alert("That file didn't look like tracker data.");
-    }catch(e){ alert("Couldn't read that file."); }
-  };
-  reader.readAsText(f);
-  this.value="";
+document.getElementById('c-connect').addEventListener('click', async ()=>{
+  const cfg=parseConfig(document.getElementById('c-config').value);
+  if(!cfg || !cfg.projectId){ cloudStatus('That config doesn’t look right — paste the whole firebaseConfig object (must include projectId).'); return; }
+  if(!cfg.databaseURL){ cloudStatus('Config is missing databaseURL. Create the Realtime Database first, then re-copy your config from Project settings.'); return; }
+  let code=document.getElementById('c-code').value.trim();
+  if(!code){ code=genCode(); document.getElementById('c-code').value=code; }
+  cloudStatus('Connecting…');
+  await cloudConnect(cfg, code);
 });
-document.getElementById('locBtn').addEventListener('click', useMyLocation);
-document.getElementById('homeBtn').addEventListener('click', useHome);
-window.addEventListener('focus', ()=>pullCloud(true));
+
+/* ---------- boot ---------- */
+reconcile();
+migrateSendModel();
+save();
+paintSync();
 render();
-initCloud();
-ensureDistances().then(ensureDriving);
+restoreFolder();
+cloudBoot();
 
 /* ---------- installable app (PWA) ---------- */
 if('serviceWorker' in navigator){
